@@ -3,6 +3,7 @@
     "id": "mom",
     "name": "Mom",
     "country": "PH",
+    "walletAddress": "0x45550b02878670c9796AaDffa4a9Cb189C2dcf2d",
     "favourite": true,
     "source": "seed",
     "updatedAt": "1970-01-01T00:00:00.000Z"

@@ -46,7 +46,7 @@ export async function prepareTransfer(
   config: Config,
   intent: RemittanceIntent
 ) {
-  const corridors = loadCorridors(config.dataDir);
+  const corridors = loadCorridors(config.dataDir, config.celoChainId);
   const corridor = resolveCorridor(
     corridors,
     intent.sourceCurrency,

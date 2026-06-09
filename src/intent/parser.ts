@@ -61,21 +61,25 @@ export function parseRemittanceIntent(
 ): RemittanceIntent {
   const locale = localeOverride ?? detectLocale(message);
   const amount = parseAmount(message, locale);
-  const destinationCountry = parseCountry(message, locale);
+  const recipientName = parseRecipientName(message);
+  const destinationCountry =
+    parseCountry(message, locale) ?? undefined;
 
   if (amount === null) {
     throw new Error("Could not parse transfer amount from message");
   }
-  if (!destinationCountry) {
-    throw new Error("Could not determine destination country from message");
+  if (!destinationCountry && !recipientName) {
+    throw new Error(
+      "Could not determine destination country from message (name a contact or include a country)"
+    );
   }
 
   const intent = RemittanceIntentSchema.parse({
     locale,
     amount,
     sourceCurrency: parseSourceCurrency(message),
-    destinationCountry,
-    recipientName: parseRecipientName(message),
+    destinationCountry: destinationCountry ?? "",
+    recipientName,
     recipientWallet: parseRecipientWallet(message),
     frequency: parseFrequency(message, locale),
     rawMessage: message,

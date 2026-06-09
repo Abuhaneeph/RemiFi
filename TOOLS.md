@@ -1,44 +1,38 @@
-# TOOLS.md - Local Notes
+# TOOLS.md - Remifi CLI (Telegram / OpenClaw)
 
-Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
+**Working directory:** `C:\Users\allen\Desktop\RemitClaw` (workspace root)
 
-## What Goes Here
+## Windows / PowerShell — use these (no `$` in shell)
 
-Things like:
-
-- Camera names and locations
-- SSH hosts and aliases
-- Preferred voices for TTS
-- Speaker/room names
-- Device nicknames
-- Anything environment-specific
-
-## Examples
-
-```markdown
-### Cameras
-
-- living-room → Main area, 180° wide angle
-- front-door → Entrance, motion-triggered
-
-### SSH
-
-- home-server → 192.168.1.100, user: admin
-
-### TTS
-
-- Preferred voice: "Nova" (warm, slightly British)
-- Default speaker: Kitchen HomePod
+```bash
+npm run remifi -- health
+npm run remifi -- quote --amount 1 --recipient Mom
+npm run remifi -- send --amount 1 --recipient Mom --yes
 ```
 
-## Why Separate?
+Map from user message: *"send $1 to mom"* → `--amount 1 --recipient Mom`
 
-Skills are shared. Your setup is yours. Keeping them apart means you can update skills without losing your notes, and share skills without leaking your infrastructure.
+## Other commands
 
----
+```bash
+npm run remifi -- contacts
+npm run remifi -- contacts Mom
+npm run remifi -- balance
+npm run remifi -- history
+```
 
-Add whatever helps you do your job. This is your cheat sheet.
+## Rules
 
-## Related
+- **Never** use `"Send $1 to Mom"` in shell — PowerShell eats `$1`
+- **Never** ask Allen for Mom's wallet — she's in contacts
+- **Quote works with zero balance** — only `send` needs USDC + CELO
+- **Never say unfunded** without running `npm run remifi -- balance` — use USDC row, ignore USDm
+- Parse JSON: `"ok": true|false`
+- Explorer: `celo-sepolia.blockscout.com` on testnet
 
-- [Agent workspace](/concepts/agent-workspace)
+## Optional HTTP API (if `npm run serve` is running)
+
+- `POST http://localhost:8787/api/intent` — quote (no PowerShell `$` issue)
+- `POST http://localhost:8787/api/transfer` — execute
+
+Prefer `--amount`/`--recipient` CLI on Windows.

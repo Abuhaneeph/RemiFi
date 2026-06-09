@@ -12,9 +12,26 @@ import {
   type ScheduleEntry,
 } from "../transfers/scheduler.js";
 import { RemitClawAgent } from "../agent/remitclaw-agent.js";
-import { loadTransactions, saveTransaction } from "../history/store.js";
-import { CELO_MAINNET_TOKENS, loadCorridors } from "../mento/client.js";
-import { getAgentAccount, getTokenBalance } from "../wallet/client.js";
+import {
+  findRecentDuplicate,
+  getDailySpentUsd,
+  loadTransactions,
+  saveTransaction,
+} from "../history/store.js";
+import { CELO_SEPOLIA_CHAIN_ID } from "../agent/registry-addresses.js";
+import {
+  CELO_SEPOLIA_USDC,
+  corridorDestinationDecimals,
+  corridorSourceDecimals,
+  loadCorridors,
+  stableTokensForChain,
+} from "../mento/client.js";
+import type { Corridor } from "../types/index.js";
+import {
+  getAgentAccount,
+  getNativeBalance,
+  getTokenBalance,
+} from "../wallet/client.js";
 import { resolveContactContext } from "../contacts/resolve.js";
 import {
   findContactByName,
@@ -48,6 +65,73 @@ export interface QuoteResult {
   matchedContact?: string;
   /** Live Mento implied rate: destination units per 1 source unit. */
   exchangeRate?: number;
+  /** Pre-flight funding check — true when a send would have enough token + gas. */
+  fundingOk?: boolean;
+  /** Agent's available balance of the source token (human units). */
+  agentSourceBalance?: number;
+  /** How much more source token the agent needs to cover this send. */
+  shortfall?: number;
+  /** Whether the agent holds any native CELO for gas. */
+  gasOk?: boolean;
+  /** Remaining daily spend allowance (USD) after this transfer. */
+  dailyRemainingUsd?: number;
+  /** Human-readable blocker when fundingOk is false. */
+  fundingHint?: string;
+}
+
+export interface AgentFunding {
+  fundingOk: boolean;
+  agentSourceBalance: number;
+  shortfall: number;
+  gasOk: boolean;
+  fundingHint?: string;
+}
+
+/**
+ * Pre-flight check: does the agent wallet hold enough source token + gas to
+ * execute this transfer? Never throws — funding info is best-effort so a quote
+ * still renders if an RPC read fails.
+ */
+export async function getAgentFunding(
+  config: Config,
+  corridor: Corridor,
+  amountUsd: number
+): Promise<AgentFunding | undefined> {
+  let address: Address;
+  try {
+    address = getAgentAccount(config).address;
+  } catch {
+    return undefined;
+  }
+
+  try {
+    const decimals = corridorSourceDecimals(corridor);
+    const [rawToken, rawNative] = await Promise.all([
+      getTokenBalance(config, corridor.sourceToken as Address, address),
+      getNativeBalance(config, address),
+    ]);
+    const balance = Number(formatUnits(rawToken, decimals));
+    const gasOk = rawNative > 0n;
+    const hasFunds = balance >= amountUsd;
+    const shortfall = hasFunds ? 0 : Number((amountUsd - balance).toFixed(6));
+
+    let fundingHint: string | undefined;
+    if (!hasFunds) {
+      fundingHint = `Agent wallet needs ${shortfall} more ${corridor.sourceCurrency} (has ${balance}).`;
+    } else if (!gasOk) {
+      fundingHint = "Agent wallet has no CELO for gas — fund it before sending.";
+    }
+
+    return {
+      fundingOk: hasFunds && gasOk,
+      agentSourceBalance: balance,
+      shortfall,
+      gasOk,
+      fundingHint,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 export interface ExecuteResult {
@@ -143,7 +227,8 @@ export async function quoteForMessage(
   );
 
   const corridorKey = `${corridor.sourceCurrency}-${corridor.destinationCountry.slice(0, 2)}`;
-  const recipientReceives = Number(formatUnits(quote.amountOut, 18));
+  const destDecimals = corridorDestinationDecimals(corridor);
+  const recipientReceives = Number(formatUnits(quote.amountOut, destDecimals));
   const comparisons = compareFees(
     corridorKey,
     intent.amount,
@@ -152,6 +237,14 @@ export async function quoteForMessage(
   );
   const savings = formatSavings(comparisons);
   const delivery = deliveryHint(intent, config);
+  const destLabel =
+    corridor.mentoPair.includes("USDC") ? "USDC" : corridor.destinationCurrency;
+
+  const funding = await getAgentFunding(config, corridor, intent.amount);
+  const limits = getSpendingLimits(config);
+  const dailyRemainingUsd = Number(
+    Math.max(0, limits.dailyLimitUsd - limits.dailySpentUsd).toFixed(2)
+  );
 
   const deliveryLine =
     delivery.method === "escrow"
@@ -165,11 +258,14 @@ export async function quoteForMessage(
   const summary = [
     `Route: ${corridor.mentoPair} (${quote.routeHops} hop${quote.routeHops === 1 ? "" : "s"})`,
     `Send: ${intent.amount} ${intent.sourceCurrency}`,
-    `Recipient receives: ~${recipientReceives.toFixed(2)} ${corridor.destinationCurrency}`,
+    `Recipient receives: ~${recipientReceives.toFixed(2)} ${destLabel}`,
     `Mento fee: ~$${quote.mentoFeeUsd.toFixed(2)} | Gas: ~$${quote.estimatedGasUsd.toFixed(4)}`,
     deliveryLine,
+    funding && !funding.fundingOk ? `⚠️ ${funding.fundingHint}` : null,
     savings,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   return {
     kind: "quote",
@@ -178,7 +274,7 @@ export async function quoteForMessage(
     savings,
     needsConfirmation,
     recipientReceives,
-    destinationCurrency: corridor.destinationCurrency,
+    destinationCurrency: destLabel,
     mentoFeeUsd: quote.mentoFeeUsd,
     estimatedGasUsd: quote.estimatedGasUsd,
     routeHops: quote.routeHops,
@@ -192,6 +288,12 @@ export async function quoteForMessage(
     matchedContact,
     exchangeRate:
       intent.amount > 0 ? recipientReceives / intent.amount : undefined,
+    fundingOk: funding?.fundingOk,
+    agentSourceBalance: funding?.agentSourceBalance,
+    shortfall: funding?.shortfall,
+    gasOk: funding?.gasOk,
+    fundingHint: funding?.fundingHint,
+    dailyRemainingUsd,
   };
 }
 
@@ -223,7 +325,27 @@ export async function executeForMessage(
   const { intent } = resolveIntent(config, message, ctx);
   const { corridor, quote } = await prepareTransfer(config, intent);
   const corridorKey = `${corridor.sourceCurrency}-${corridor.destinationCountry.slice(0, 2)}`;
-  const recipientReceives = Number(formatUnits(quote.amountOut, 18));
+  const destDecimals = corridorDestinationDecimals(corridor);
+  const recipientReceives = Number(formatUnits(quote.amountOut, destDecimals));
+  const destLabelExec =
+    corridor.mentoPair.includes("USDC") ? "USDC" : corridor.destinationCurrency;
+
+  // Idempotency: refuse to re-send an identical transfer within 90s.
+  const duplicate = findRecentDuplicate(config.dataDir, intent);
+  if (duplicate && duplicate.status === "confirmed") {
+    return {
+      status: "confirmed",
+      receiptId: duplicate.id,
+      txHash: duplicate.txHash,
+      recipientReceives,
+      destinationCurrency: destLabelExec,
+      summary: `Duplicate ignored — an identical ${intent.amount} ${intent.sourceCurrency} transfer just completed (receipt ${duplicate.id}).`,
+      savings: "",
+      deliveryMethod: duplicate.deliveryMethod,
+      claimUrl: duplicate.claimUrl,
+    };
+  }
+  const destLabel = destLabelExec;
   const comparisons = compareFees(
     corridorKey,
     intent.amount,
@@ -296,8 +418,8 @@ export async function executeForMessage(
     receiptId: record.id,
     txHash: record.txHash,
     recipientReceives,
-    destinationCurrency: corridor.destinationCurrency,
-    summary: `Sent ${intent.amount} ${intent.sourceCurrency} → ~${recipientReceives.toFixed(2)} ${corridor.destinationCurrency}`,
+    destinationCurrency: destLabel,
+    summary: `Sent ${intent.amount} ${intent.sourceCurrency} → ~${recipientReceives.toFixed(2)} ${destLabel}`,
     savings,
     deliveryMethod: "wallet",
   };
@@ -367,7 +489,10 @@ export type ProfileCorridor = {
 
 export function getProfileInfo(config: Config) {
   const limits = getSpendingLimits(config);
-  const corridors: ProfileCorridor[] = loadCorridors(config.dataDir).map((c) => ({
+  const corridors: ProfileCorridor[] = loadCorridors(
+    config.dataDir,
+    config.celoChainId
+  ).map((c) => ({
     id: c.id,
     sourceCurrency: c.sourceCurrency,
     destinationCurrency: c.destinationCurrency,
@@ -428,13 +553,23 @@ export async function getBalances(
   config: Config,
   address: string
 ): Promise<BalanceItem[]> {
-  const tokens: Array<{ symbol: string; address: string }> = [
-    { symbol: "USDm", address: CELO_MAINNET_TOKENS.USDm },
-    { symbol: "EURm", address: CELO_MAINNET_TOKENS.EURm },
-    { symbol: "BRLm", address: CELO_MAINNET_TOKENS.BRLm },
-    { symbol: "PHPm", address: CELO_MAINNET_TOKENS.PHPm },
-    { symbol: "NGNm", address: CELO_MAINNET_TOKENS.NGNm },
-  ];
+  const stables = stableTokensForChain(config.celoChainId);
+  const tokens: Array<{ symbol: string; address: string; decimals: number }> =
+    config.celoChainId === CELO_SEPOLIA_CHAIN_ID
+      ? [
+          { symbol: "USDC", address: CELO_SEPOLIA_USDC, decimals: 6 },
+          { symbol: "USDm", address: stables.USDm, decimals: 18 },
+          { symbol: "EURm", address: stables.EURm, decimals: 18 },
+          { symbol: "PHPm", address: stables.PHPm, decimals: 18 },
+          { symbol: "NGNm", address: stables.NGNm, decimals: 18 },
+        ]
+      : [
+          { symbol: "USDm", address: stables.USDm, decimals: 18 },
+          { symbol: "EURm", address: stables.EURm, decimals: 18 },
+          { symbol: "BRLm", address: stables.BRLm, decimals: 18 },
+          { symbol: "PHPm", address: stables.PHPm, decimals: 18 },
+          { symbol: "NGNm", address: stables.NGNm, decimals: 18 },
+        ];
 
   const results = await Promise.all(
     tokens.map(async (token) => {
@@ -447,7 +582,7 @@ export async function getBalances(
         return {
           symbol: token.symbol,
           address: token.address,
-          balance: Number(formatUnits(raw, 18)),
+          balance: Number(formatUnits(raw, token.decimals)),
         };
       } catch {
         return { symbol: token.symbol, address: token.address, balance: 0 };
