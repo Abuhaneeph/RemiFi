@@ -7,7 +7,7 @@
   "endpoints": [
     {
       "type": "a2a",
-      "url": "https://remifi.xyz/.well-known/agent.json"
+      "url": "https://remifi.xyz/.well-known/agent-card.json"
     },
     {
       "type": "http",
@@ -29,6 +29,11 @@
       "endpoint": "https://remifi.xyz"
     },
     {
+      "name": "A2A",
+      "endpoint": "https://remifi.xyz/.well-known/agent-card.json",
+      "version": "0.3.0"
+    },
+    {
       "name": "HTTP",
       "endpoint": "https://api.remifi.xyz",
       "version": "1.0.0"
@@ -41,7 +46,7 @@
     {
       "name": "MCP",
       "endpoint": "https://api.remifi.xyz",
-      "version": "1.0.0",
+      "version": "2025-06-18",
       "mcpTools": [
         "natural_language_parsing",
         "mento_quote",
@@ -89,14 +94,9 @@
   "active": true,
   "registrations": [
     {
-      "agentId": 326,
-      "agentRegistry": "eip155:11142220:0x8004A818BFB912233c491871b3d84c89A494BD9e"
-    },
-    {
       "agentId": 9237,
       "agentRegistry": "eip155:42220:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
     }
   ],
-  "supportedTrust": ["reputation", "validation", "tee"],
-  "supportedTrusts": ["reputation", "crypto-economic", "tee-attestation"]
+  "supportedTrust": ["reputation", "crypto-economic", "tee-attestation"]
 }

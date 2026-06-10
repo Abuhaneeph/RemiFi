@@ -44,6 +44,74 @@ export const REMIFI_MCP_RESOURCES = [
   "premium_quote",
 ] as const;
 
+export type McpResourceName = (typeof REMIFI_MCP_RESOURCES)[number];
+
+/** MCP protocol + service version (8004scan expects 2025-06-18). */
+export const MCP_PROTOCOL_VERSION = "2025-06-18";
+
+/** Kebab-case public paths for MCP resource probes (8004scan health checks). */
+export const MCP_RESOURCE_PATHS: Record<McpResourceName, string> = {
+  health_check: "/api/health",
+  agent_info: "/api/agent",
+  get_quote: "/api/x402/info",
+  premium_quote: "/api/x402/info",
+  get_claim: "/api/claim",
+  get_history: "/api/history",
+  get_balance: "/api/balance",
+  list_contacts: "/api/contacts",
+  resolve_contact: "/api/contacts",
+  parse_intent: "/api/intent",
+  execute_transfer: "/api/transfer",
+  sync_contacts: "/api/contacts/sync",
+  import_phone_contacts: "/api/contacts/import-phone",
+};
+
+export function mcpResourceKebabPath(name: McpResourceName): string {
+  return MCP_RESOURCE_PATHS[name];
+}
+
+/** Resolve MCP resource name from an API path (first match). */
+export function mcpResourceForPath(path: string): McpResourceName | undefined {
+  return REMIFI_MCP_RESOURCES.find((name) => MCP_RESOURCE_PATHS[name] === path);
+}
+
+export function mcpResourceUri(config: Config, name: McpResourceName): string {
+  const api = (
+    config.publicAgentApiUrl ?? `http://localhost:${config.agentApiPort}`
+  ).replace(/\/$/, "");
+  return `${api}${MCP_RESOURCE_PATHS[name]}`;
+}
+
+/** Descriptor returned for auth-gated MCP resources (probe-friendly, no API key). */
+export function buildMcpResourceDescriptor(
+  config: Config,
+  name: McpResourceName
+) {
+  const path = MCP_RESOURCE_PATHS[name];
+  const publicGet = new Set([
+    "/api/health",
+    "/api/agent",
+    "/api/x402/info",
+    "/api/claim",
+  ]);
+  const method = path.includes("contacts/sync") ||
+    path.includes("import-phone") ||
+    path === "/api/intent" ||
+    path === "/api/transfer"
+    ? "POST"
+    : "GET";
+
+  return {
+    resource: name,
+    path,
+    method,
+    public: publicGet.has(path),
+    auth: publicGet.has(path) ? null : { type: "api-key", header: "x-api-key" },
+    agentId: config.agentId ?? null,
+    chainId: config.celoChainId,
+  };
+}
+
 /** Public MCP discovery document for 8004scan and MCP clients (no API key). */
 export function buildMcpManifest(config: Config) {
   const api = (
@@ -51,8 +119,8 @@ export function buildMcpManifest(config: Config) {
   ).replace(/\/$/, "");
 
   return {
-    protocolVersion: "2025-06-18",
-    serverInfo: { name: config.agentName, version: "1.0.0" },
+    protocolVersion: MCP_PROTOCOL_VERSION,
+    serverInfo: { name: config.agentName, version: MCP_PROTOCOL_VERSION },
     transport: { type: "http", url: api },
     capabilities: { tools: {}, prompts: {}, resources: {} },
     tools: REMIFI_MCP_TOOLS.map((name) => ({
@@ -62,7 +130,7 @@ export function buildMcpManifest(config: Config) {
     prompts: REMIFI_MCP_PROMPTS.map((name) => ({ name })),
     resources: REMIFI_MCP_RESOURCES.map((name) => ({
       name,
-      uri: `${api}/api/${name.replace(/_/g, "-")}`,
+      uri: mcpResourceUri(config, name),
     })),
     authentication: {
       type: "api-key",
@@ -98,7 +166,8 @@ export function buildApiIndex(config: Config, walletAddress?: string | null) {
     endpoints: {
       health: `${api}/api/health`,
       agent: `${api}/api/agent`,
-      agentCard: `${api}/.well-known/agent.json`,
+      agentCard: web ? `${web}/.well-known/agent.json` : `${api}/.well-known/agent.json`,
+      a2aCard: web ? `${web}/.well-known/agent-card.json` : null,
       mcp: `${api}/.well-known/mcp.json`,
       web: web ?? null,
     },
@@ -110,9 +179,12 @@ export function buildApiIndex(config: Config, walletAddress?: string | null) {
         "/api/health",
         "/api/agent",
         "/.well-known/agent.json",
+        "/.well-known/agent-registration.json",
         "/.well-known/mcp.json",
         "/api/x402/info",
         "/api/x402/premium-quote",
+        "/api/claim",
+        ...REMIFI_MCP_RESOURCES.map((name) => MCP_RESOURCE_PATHS[name]),
       ],
     },
   };

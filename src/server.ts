@@ -19,10 +19,12 @@ import {
   toggleSchedule,
 } from "./api/service.js";
 import { StoredContactSchema } from "./contacts/types.js";
-import { buildAgentCard } from "./agent/agent-card.js";
+import { buildA2aAgentCard, buildAgentCard } from "./agent/agent-card.js";
 import {
   buildApiIndex,
   buildMcpManifest,
+  buildMcpResourceDescriptor,
+  mcpResourceForPath,
   REMIFI_MCP_TOOLS,
 } from "./agent/mcp-manifest.js";
 import { buildAgentRegistrationFile } from "./agent/registration-file.js";
@@ -116,6 +118,20 @@ async function handleMcpJsonRpc(
           name,
           description: `Remifi ${name.replace(/_/g, " ")}`,
           inputSchema: { type: "object", properties: {} },
+        })),
+      },
+    });
+  }
+
+  if (method === "resources/list") {
+    const manifest = buildMcpManifest(cfg);
+    return sendJson(res, 200, {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        resources: manifest.resources.map((resource) => ({
+          ...resource,
+          description: `Remifi ${resource.name.replace(/_/g, " ")}`,
         })),
       },
     });
@@ -218,6 +234,10 @@ const server = createServer(async (req, res) => {
       );
     }
 
+    if (req.method === "GET" && path === "/.well-known/agent-card.json") {
+      return sendJson(res, 200, buildA2aAgentCard(config));
+    }
+
     // ── x402: payment requirements for the premium quote endpoint ──
     if (req.method === "GET" && path === "/api/x402/info") {
       const resourceUrl = `${url.origin}/api/x402/premium-quote`;
@@ -256,6 +276,24 @@ const server = createServer(async (req, res) => {
       if (!message) return sendJson(res, 400, { error: "message is required" });
       const quote = await quoteForMessage(config, message);
       return sendJson(res, 200, { paid: true, quote });
+    }
+
+    // Public MCP resource descriptors (8004scan GET probes on auth-gated paths)
+    if (req.method === "GET") {
+      const resource = mcpResourceForPath(path);
+      const hasClaimId =
+        url.searchParams.get("claimId") ?? url.searchParams.get("c");
+      const hasBalanceAddress = url.searchParams.get("address");
+      if (
+        resource &&
+        path !== "/api/health" &&
+        path !== "/api/agent" &&
+        path !== "/api/x402/info" &&
+        !(path === "/api/claim" && hasClaimId) &&
+        !(path === "/api/balance" && hasBalanceAddress)
+      ) {
+        return sendJson(res, 200, buildMcpResourceDescriptor(config, resource));
+      }
     }
 
     if (!authorized(req, config)) {
