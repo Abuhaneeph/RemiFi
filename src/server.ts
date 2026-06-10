@@ -278,8 +278,8 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { paid: true, quote });
     }
 
-    // Public MCP resource descriptors (8004scan GET probes on auth-gated paths)
-    if (req.method === "GET") {
+    // Public MCP resource descriptors (8004scan probes only — never for x-api-key clients)
+    if (req.method === "GET" && !req.headers["x-api-key"]) {
       const resource = mcpResourceForPath(path);
       const hasClaimId =
         url.searchParams.get("claimId") ?? url.searchParams.get("c");

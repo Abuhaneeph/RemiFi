@@ -79,14 +79,15 @@ function storedToPerson(contact: StoredContact): Person {
   };
 }
 
-function mergePeople(local: Person[], remote: StoredContact[]): Person[] {
+function mergePeople(local: Person[], remote: StoredContact[] | undefined): Person[] {
+  const agentContacts = Array.isArray(remote) ? remote : [];
   const byId = new Map<string, Person>();
 
   for (const p of [...PEOPLE, ...local]) {
     byId.set(p.id, p);
   }
 
-  for (const contact of remote) {
+  for (const contact of agentContacts) {
     const existing = byId.get(contact.id);
     if (!existing) {
       byId.set(contact.id, storedToPerson(contact));
@@ -131,7 +132,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     setSyncing(true);
     try {
       const { contacts } = await syncContacts(manual.map(personToStored));
-      setRemote(contacts);
+      setRemote(Array.isArray(contacts) ? contacts : []);
     } catch {
       // Agent API may be offline during local dev.
     } finally {
@@ -146,7 +147,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       void (async () => {
         try {
           const { contacts } = await fetchContacts();
-          setRemote(contacts);
+          setRemote(Array.isArray(contacts) ? contacts : []);
         } catch {
           // Fall back to local-only contacts.
         }
@@ -184,7 +185,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
         .map((c) => ({ name: c.name, phone: c.phone! }));
 
       const { contacts, imported } = await importPhoneContacts(entries);
-      setRemote(contacts);
+      setRemote(Array.isArray(contacts) ? contacts : []);
       localStorage.setItem(PHONE_IMPORT_KEY, "1");
       return imported;
     } catch {

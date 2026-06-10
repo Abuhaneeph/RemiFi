@@ -52,7 +52,7 @@ export function AgentApiProvider({ children }: { children: ReactNode }) {
       return;
     }
     const { items } = await fetchBalances(address);
-    setBalances(items);
+    setBalances(Array.isArray(items) ? items : []);
     setBalanceAddress(address);
     setBalancesError(null);
   }, []);
