@@ -316,7 +316,10 @@ const server = createServer(async (req, res) => {
 
     if (
       req.method === "POST" &&
-      (path === "/" || path === "/mcp" || path === "/api/mcp")
+      (path === "/" ||
+        path === "/mcp" ||
+        path === "/api/mcp" ||
+        path === "/.well-known/mcp.json")
     ) {
       return handleMcpJsonRpc(req, res, config);
     }
