@@ -255,7 +255,11 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && path === "/.well-known/agent-card.json") {
-      return sendJson(res, 200, buildA2aAgentCard(config));
+      return sendJson(
+        res,
+        200,
+        buildA2aAgentCard(config, getAgentAddress(config))
+      );
     }
 
     // ── x402: payment requirements for the premium quote endpoint ──
