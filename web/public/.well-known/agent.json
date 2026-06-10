@@ -2,16 +2,32 @@
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "Remifi",
   "description": "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds. remifi.xyz · api.remifi.xyz · Telegram @remifi_bot",
-  "tags": ["multilingual", "remittance", "celo", "mento", "stablecoin", "telegram", "x402", "english", "spanish", "portuguese", "french"],
+  "tags": [
+    "multilingual",
+    "remittance",
+    "celo",
+    "mento",
+    "stablecoin",
+    "telegram",
+    "x402",
+    "english",
+    "spanish",
+    "portuguese",
+    "french"
+  ],
   "image": "https://remifi.xyz/assets/remifi-agent.png",
   "endpoints": [
     {
       "type": "a2a",
-      "url": "https://remifi.xyz/.well-known/agent-card.json"
+      "url": "https://api.remifi.xyz/.well-known/agent-card.json"
     },
     {
       "type": "http",
       "url": "https://api.remifi.xyz"
+    },
+    {
+      "type": "mcp",
+      "url": "https://api.remifi.xyz/.well-known/mcp.json"
     },
     {
       "type": "x402",
@@ -26,26 +42,71 @@
   "services": [
     {
       "name": "web",
-      "endpoint": "https://remifi.xyz"
+      "endpoint": "https://remifi.xyz",
+      "description": "Web interface for Remifi remittance agent"
     },
     {
-      "name": "A2A",
-      "endpoint": "https://remifi.xyz/.well-known/agent-card.json",
-      "version": "0.3.0"
+      "name": "send-money",
+      "endpoint": "https://api.remifi.xyz/api/transfer",
+      "description": "Send cross-border stablecoin remittance on Celo via Mento"
     },
     {
-      "name": "HTTP",
-      "endpoint": "https://api.remifi.xyz",
-      "version": "1.0.0"
+      "name": "get-quote",
+      "endpoint": "https://api.remifi.xyz/api/intent",
+      "description": "Get live Mento route quote with fee comparison vs banks"
     },
     {
-      "name": "x402",
+      "name": "check-balance",
+      "endpoint": "https://api.remifi.xyz/api/balance",
+      "description": "Check on-chain USDC and stablecoin balances on Celo"
+    },
+    {
+      "name": "list-contacts",
+      "endpoint": "https://api.remifi.xyz/api/contacts",
+      "description": "List saved remittance recipients and wallets"
+    },
+    {
+      "name": "get-history",
+      "endpoint": "https://api.remifi.xyz/api/history",
+      "description": "Transfer history and transaction status"
+    },
+    {
+      "name": "claim-transfer",
+      "endpoint": "https://api.remifi.xyz/api/claim",
+      "description": "Look up and claim phone-only escrow transfers"
+    },
+    {
+      "name": "premium-quote",
       "endpoint": "https://api.remifi.xyz/api/x402/premium-quote",
-      "version": "1.0.0"
+      "description": "x402-gated premium Mento quote with detailed fee analysis"
+    },
+    {
+      "name": "sync-contacts",
+      "endpoint": "https://api.remifi.xyz/api/contacts/sync",
+      "description": "Sync recipient contacts for remittances"
+    },
+    {
+      "name": "import-contacts",
+      "endpoint": "https://api.remifi.xyz/api/contacts/import-phone",
+      "description": "Import phone contacts as remittance recipients"
+    },
+    {
+      "name": "compare-fees",
+      "endpoint": "https://api.remifi.xyz/api/x402/info",
+      "description": "Compare Remifi fees and savings vs traditional remittance"
+    },
+    {
+      "name": "telegram",
+      "endpoint": "https://t.me/remifi_bot",
+      "description": "Telegram bot for multilingual remittances on Celo (EN / ES / PT / FR)"
+    },
+    {
+      "name": "api",
+      "endpoint": "https://api.remifi.xyz"
     },
     {
       "name": "MCP",
-      "endpoint": "https://api.remifi.xyz",
+      "endpoint": "https://api.remifi.xyz/.well-known/mcp.json",
       "version": "2025-06-18",
       "mcpTools": [
         "natural_language_parsing",
@@ -72,21 +133,47 @@
         "confirm_send",
         "cancel_transfer",
         "add_recipient"
+      ]
+    },
+    {
+      "name": "A2A",
+      "endpoint": "https://api.remifi.xyz/.well-known/agent-card.json",
+      "version": "0.3.0",
+      "a2aSkills": [
+        "natural_language_processing/natural_language_generation/text_generation",
+        "natural_language_processing/natural_language_understanding/contextual_comprehension",
+        "natural_language_processing/conversation/chatbot",
+        "natural_language_processing/information_retrieval_and_synthesis/search",
+        "natural_language_processing/information_retrieval_and_synthesis/question_answering",
+        "natural_language_processing/analytical_and_logical_reasoning/problem_solving",
+        "tool_interaction/automation/workflow_automation",
+        "technology/blockchain/cryptocurrency",
+        "technology/blockchain/smart_contracts",
+        "finance_and_business/finance/digital_payments"
+      ]
+    },
+    {
+      "name": "OASF",
+      "endpoint": "https://github.com/agntcy/oasf/",
+      "version": "v0.8.0",
+      "skills": [
+        "natural_language_processing/natural_language_generation/text_generation",
+        "natural_language_processing/natural_language_understanding/contextual_comprehension",
+        "natural_language_processing/conversation/chatbot",
+        "natural_language_processing/information_retrieval_and_synthesis/search",
+        "natural_language_processing/information_retrieval_and_synthesis/question_answering",
+        "natural_language_processing/analytical_and_logical_reasoning/problem_solving",
+        "tool_interaction/automation/workflow_automation",
+        "technology/blockchain/cryptocurrency",
+        "technology/blockchain/smart_contracts",
+        "finance_and_business/finance/digital_payments"
       ],
-      "mcpResources": [
-        "parse_intent",
-        "get_quote",
-        "execute_transfer",
-        "list_contacts",
-        "resolve_contact",
-        "sync_contacts",
-        "import_phone_contacts",
-        "get_balance",
-        "get_history",
-        "get_claim",
-        "health_check",
-        "agent_info",
-        "premium_quote"
+      "domains": [
+        "technology/blockchain/cryptocurrency",
+        "technology/blockchain/smart_contracts",
+        "finance_and_business/finance",
+        "technology/blockchain",
+        "commerce/retail/online_retail"
       ]
     }
   ],
@@ -98,5 +185,9 @@
       "agentRegistry": "eip155:42220:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
     }
   ],
-  "supportedTrust": ["reputation", "crypto-economic", "tee-attestation"]
+  "supportedTrust": [
+    "reputation",
+    "crypto-economic",
+    "tee-attestation"
+  ]
 }

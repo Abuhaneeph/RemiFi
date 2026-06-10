@@ -17,10 +17,15 @@ import { useContacts } from "../context/ContactsContext";
 import { useLanguage } from "../context/LanguageContext";
 import {
   contactTransferContext,
-  enrichMessageWithContact,
   extractRecipientName,
   matchContact,
 } from "../lib/contacts";
+import {
+  classifyPayMessage,
+  normalizePayMessage,
+  payChatReplyKey,
+  payErrorHint,
+} from "../lib/pay-message";
 import {
   executeTransfer,
   fetchQuote,
@@ -126,12 +131,18 @@ export function PayChat() {
     setThinking(true);
 
     try {
+      const chatKind = classifyPayMessage(trimmed);
+      if (chatKind !== "remittance") {
+        appendBot({ text: t(payChatReplyKey(chatKind)) });
+        return;
+      }
+
       const activeContact = contactForMessage(trimmed);
       const ctx = {
         ...contactTransferContext(activeContact),
         ...extraCtx,
       };
-      const apiMessage = enrichMessageWithContact(trimmed, activeContact);
+      const apiMessage = normalizePayMessage(trimmed, activeContact);
 
       const quote = await fetchQuote(apiMessage, ctx);
 
@@ -182,7 +193,7 @@ export function PayChat() {
     } catch (err) {
       const reason = err instanceof Error ? err.message : "Something went wrong";
       appendBot({
-        text: `${t("pay.errorPrefix")} ${reason}. ${t("pay.errorSuffix")}`,
+        text: `${t("pay.errorPrefix")} ${reason}. ${payErrorHint(reason)}`,
       });
     } finally {
       setThinking(false);

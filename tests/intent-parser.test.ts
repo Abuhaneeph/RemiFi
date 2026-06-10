@@ -33,6 +33,12 @@ describe("parseRemittanceIntent", () => {
     expect(intent.locale).toBe("fr");
   });
 
+  it("parses bare amount without currency symbol", () => {
+    const intent = parseRemittanceIntent("Send 50 to Mom");
+    expect(intent.amount).toBe(50);
+    expect(intent.recipientName).toBe("Mom");
+  });
+
   it("throws when amount is missing", () => {
     expect(() =>
       parseRemittanceIntent("Send money to Nigeria")

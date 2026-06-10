@@ -49,6 +49,33 @@ export type McpResourceName = (typeof REMIFI_MCP_RESOURCES)[number];
 /** MCP protocol + service version (8004scan expects 2025-06-18). */
 export const MCP_PROTOCOL_VERSION = "2025-06-18";
 
+/** MCP server-card schema (matches Toppa / modelcontextprotocol.io). */
+export const MCP_SERVER_CARD_SCHEMA =
+  "https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json";
+
+export const MCP_SERVER_VERSION = "2.0.0";
+
+export const MCP_TRANSPORT_PATH = "/mcp";
+
+function apiBaseUrl(config: Config): string {
+  return (
+    config.publicAgentApiUrl ?? `http://localhost:${config.agentApiPort}`
+  ).replace(/\/$/, "");
+}
+
+export function mcpTransportUrl(config: Config): string {
+  return `${apiBaseUrl(config)}${MCP_TRANSPORT_PATH}`;
+}
+
+/** ERC-8004 MCP service endpoint (8004scan probes this URL). */
+export function mcpDiscoveryUrl(config: Config): string {
+  return `${apiBaseUrl(config)}/.well-known/mcp.json`;
+}
+
+function celoChainSlug(chainId: number): string {
+  return chainId === 11142220 ? "celo-sepolia" : "celo";
+}
+
 /** Kebab-case public paths for MCP resource probes (8004scan health checks). */
 export const MCP_RESOURCE_PATHS: Record<McpResourceName, string> = {
   health_check: "/api/health",
@@ -75,11 +102,22 @@ export function mcpResourceForPath(path: string): McpResourceName | undefined {
   return REMIFI_MCP_RESOURCES.find((name) => MCP_RESOURCE_PATHS[name] === path);
 }
 
+/** 8004scan custom-service slugs (kebab-case) keyed by API path. */
+export const CUSTOM_SERVICE_BY_PATH: Record<string, string> = {
+  "/api/transfer": "send-money",
+  "/api/intent": "get-quote",
+  "/api/balance": "check-balance",
+  "/api/contacts": "list-contacts",
+  "/api/history": "get-history",
+  "/api/claim": "claim-transfer",
+  "/api/contacts/sync": "sync-contacts",
+  "/api/contacts/import-phone": "import-contacts",
+  "/api/x402/info": "compare-fees",
+  "/api/x402/premium-quote": "premium-quote",
+};
+
 export function mcpResourceUri(config: Config, name: McpResourceName): string {
-  const api = (
-    config.publicAgentApiUrl ?? `http://localhost:${config.agentApiPort}`
-  ).replace(/\/$/, "");
-  return `${api}${MCP_RESOURCE_PATHS[name]}`;
+  return `${apiBaseUrl(config)}${MCP_RESOURCE_PATHS[name]}`;
 }
 
 /** Descriptor returned for auth-gated MCP resources (probe-friendly, no API key). */
@@ -102,6 +140,8 @@ export function buildMcpResourceDescriptor(
     : "GET";
 
   return {
+    status: "ok",
+    service: CUSTOM_SERVICE_BY_PATH[path] ?? name.replace(/_/g, "-"),
     resource: name,
     path,
     method,
@@ -109,25 +149,64 @@ export function buildMcpResourceDescriptor(
     auth: publicGet.has(path) ? null : { type: "api-key", header: "x-api-key" },
     agentId: config.agentId ?? null,
     chainId: config.celoChainId,
+    probe: true,
   };
 }
 
-/** Public MCP discovery document for 8004scan and MCP clients (no API key). */
-export function buildMcpManifest(config: Config) {
-  const api = (
-    config.publicAgentApiUrl ?? `http://localhost:${config.agentApiPort}`
-  ).replace(/\/$/, "");
-
+/** 8004scan custom-service probe for paths outside MCP_RESOURCE_PATHS. */
+export function buildCustomServiceProbe(
+  config: Config,
+  service: string,
+  path: string,
+  method: "GET" | "POST"
+) {
   return {
+    status: "ok",
+    service,
+    path,
+    method,
+    public: false,
+    auth: { type: "api-key", header: "x-api-key" },
+    agentId: config.agentId ?? null,
+    chainId: config.celoChainId,
+    probe: true,
+  };
+}
+
+/**
+ * Public MCP server card at `/.well-known/mcp.json` (8004scan + MCP clients).
+ *
+ * Format aligned with Toppa: mcp-server-card schema, streamable-http on `/mcp`,
+ * tools as a string array, and optional `erc8004` block.
+ */
+export function buildMcpManifest(config: Config) {
+  const api = apiBaseUrl(config);
+  const mcpEndpoint = mcpTransportUrl(config);
+
+  const manifest: Record<string, unknown> = {
+    $schema: MCP_SERVER_CARD_SCHEMA,
+    schema_version: MCP_PROTOCOL_VERSION,
+    version: MCP_SERVER_VERSION,
     protocolVersion: MCP_PROTOCOL_VERSION,
-    serverInfo: { name: config.agentName, version: MCP_PROTOCOL_VERSION },
-    transport: { type: "http", url: api },
-    capabilities: { tools: {}, prompts: {}, resources: {} },
-    tools: REMIFI_MCP_TOOLS.map((name) => ({
-      name,
-      description: `Remifi ${name.replace(/_/g, " ")}`,
-    })),
-    prompts: REMIFI_MCP_PROMPTS.map((name) => ({ name })),
+    serverInfo: {
+      name: config.agentName.toLowerCase(),
+      title: config.agentName,
+      version: MCP_SERVER_VERSION,
+    },
+    description: config.agentDescription,
+    iconUrl:
+      config.agentImage ?? "https://remifi.xyz/assets/remifi-agent.png",
+    endpoint: mcpEndpoint,
+    transport: {
+      type: "streamable-http",
+      endpoint: MCP_TRANSPORT_PATH,
+    },
+    capabilities: {
+      tools: {},
+      prompts: {},
+    },
+    tools: [...REMIFI_MCP_TOOLS],
+    prompts: [...REMIFI_MCP_PROMPTS],
     resources: REMIFI_MCP_RESOURCES.map((name) => ({
       name,
       uri: mcpResourceUri(config, name),
@@ -135,16 +214,25 @@ export function buildMcpManifest(config: Config) {
     authentication: {
       type: "api-key",
       header: "x-api-key",
-      note: "Quotes and transfers require x-api-key. Discovery endpoints are public.",
+      note: "Quotes and transfers require x-api-key. Discovery and HEAD/GET probes are public.",
     },
   };
+
+  if (config.agentId != null) {
+    manifest.erc8004 = {
+      agent_id: config.agentId,
+      chain: celoChainSlug(config.celoChainId),
+      chain_id: config.celoChainId,
+      registry: config.identityRegistryAddress,
+    };
+  }
+
+  return manifest;
 }
 
 /** Root service index — 8004scan HTTP/MCP probes hit GET / without credentials. */
 export function buildApiIndex(config: Config, walletAddress?: string | null) {
-  const api = (
-    config.publicAgentApiUrl ?? `http://localhost:${config.agentApiPort}`
-  ).replace(/\/$/, "");
+  const api = apiBaseUrl(config);
   const web = config.publicBaseUrl?.replace(/\/$/, "");
 
   return {
@@ -166,9 +254,10 @@ export function buildApiIndex(config: Config, walletAddress?: string | null) {
     endpoints: {
       health: `${api}/api/health`,
       agent: `${api}/api/agent`,
-      agentCard: web ? `${web}/.well-known/agent.json` : `${api}/.well-known/agent.json`,
-      a2aCard: web ? `${web}/.well-known/agent-card.json` : null,
-      mcp: `${api}/.well-known/mcp.json`,
+      agentCard: `${api}/.well-known/agent.json`,
+      a2aCard: `${api}/.well-known/agent-card.json`,
+      mcp: mcpDiscoveryUrl(config),
+      mcpTransport: mcpTransportUrl(config),
       web: web ?? null,
     },
     auth: {

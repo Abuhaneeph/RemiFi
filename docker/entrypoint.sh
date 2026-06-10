@@ -11,4 +11,5 @@ for f in corridors.json corridors.sepolia.json contacts.json; do
   fi
 done
 
-exec node dist/server.js
+# tsx resolves @mento-protocol/mento-sdk ESM correctly (node dist/ breaks quotes on Render).
+exec npx tsx src/server.ts

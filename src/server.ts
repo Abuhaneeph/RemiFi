@@ -22,10 +22,17 @@ import { StoredContactSchema } from "./contacts/types.js";
 import { buildA2aAgentCard, buildAgentCard } from "./agent/agent-card.js";
 import {
   buildApiIndex,
+  buildCustomServiceProbe,
   buildMcpManifest,
   buildMcpResourceDescriptor,
+  MCP_PROTOCOL_VERSION,
   mcpResourceForPath,
+  mcpTransportUrl,
+  REMIFI_MCP_PROMPTS,
+  REMIFI_MCP_RESOURCES,
   REMIFI_MCP_TOOLS,
+  mcpResourceUri,
+  type McpResourceName,
 } from "./agent/mcp-manifest.js";
 import { buildAgentRegistrationFile } from "./agent/registration-file.js";
 import { agentRegistryId } from "./agent/registry-addresses.js";
@@ -39,16 +46,30 @@ const config = loadConfig();
 
 function setCors(res: ServerResponse, origin: string) {
   res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
     "Content-Type, x-api-key, X-PAYMENT, PAYMENT-SIGNATURE"
   );
 }
 
-function sendJson(res: ServerResponse, status: number, body: unknown) {
+/** GET or HEAD — 8004scan probes use HEAD on service endpoints. */
+function isReadMethod(method: string | undefined): boolean {
+  return method === "GET" || method === "HEAD";
+}
+
+function sendJson(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  method?: string
+) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
+  if (method === "HEAD") {
+    res.end();
+    return;
+  }
   res.end(JSON.stringify(body));
 }
 
@@ -123,15 +144,28 @@ async function handleMcpJsonRpc(
     });
   }
 
-  if (method === "resources/list") {
-    const manifest = buildMcpManifest(cfg);
+  if (method === "prompts/list") {
     return sendJson(res, 200, {
       jsonrpc: "2.0",
       id,
       result: {
-        resources: manifest.resources.map((resource) => ({
-          ...resource,
-          description: `Remifi ${resource.name.replace(/_/g, " ")}`,
+        prompts: REMIFI_MCP_PROMPTS.map((name) => ({
+          name,
+          description: `Remifi ${name.replace(/_/g, " ")} prompt`,
+        })),
+      },
+    });
+  }
+
+  if (method === "resources/list") {
+    return sendJson(res, 200, {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        resources: REMIFI_MCP_RESOURCES.map((name: McpResourceName) => ({
+          name,
+          uri: mcpResourceUri(cfg, name),
+          description: `Remifi ${name.replace(/_/g, " ")}`,
         })),
       },
     });
@@ -154,6 +188,69 @@ function authorized(req: IncomingMessage, cfg: Config): boolean {
   return req.headers["x-api-key"] === cfg.agentApiKey;
 }
 
+/**
+ * 8004scan health checks: HEAD/GET without x-api-key on service URLs.
+ * Returns descriptor JSON (or empty body for HEAD) — not live execution.
+ */
+function handle8004Probe(
+  req: IncomingMessage,
+  res: ServerResponse,
+  path: string,
+  url: URL,
+  cfg: Config
+): boolean {
+  if (req.headers["x-api-key"]) return false;
+
+  if (
+    isReadMethod(req.method) &&
+    (path === "/mcp" || path === "/api/mcp")
+  ) {
+    sendJson(
+      res,
+      200,
+      {
+        status: "ok",
+        transport: "streamable-http",
+        protocolVersion: MCP_PROTOCOL_VERSION,
+        endpoint: mcpTransportUrl(cfg),
+      },
+      req.method
+    );
+    return true;
+  }
+
+  // 8004scan probes auth-gated custom services with HEAD (no API key).
+  if (req.method !== "HEAD") return false;
+
+  const claimId = url.searchParams.get("claimId") ?? url.searchParams.get("c");
+  if (path === "/api/claim" && claimId && /^0x[a-fA-F0-9]{64}$/.test(claimId)) {
+    return false;
+  }
+
+  const resource = mcpResourceForPath(path);
+  if (resource) {
+    sendJson(
+      res,
+      200,
+      buildMcpResourceDescriptor(cfg, resource),
+      req.method
+    );
+    return true;
+  }
+
+  if (path === "/api/x402/premium-quote") {
+    sendJson(
+      res,
+      200,
+      buildCustomServiceProbe(cfg, "premium-quote", path, "POST"),
+      req.method
+    );
+    return true;
+  }
+
+  return false;
+}
+
 const server = createServer(async (req, res) => {
   setCors(res, config.webOrigin);
 
@@ -166,50 +263,68 @@ const server = createServer(async (req, res) => {
   const path = url.pathname;
 
   try {
-    if (req.method === "GET" && path === "/") {
+    if (isReadMethod(req.method) && path === "/") {
       res.setHeader("Accept-Payment", "x402");
-      return sendJson(res, 200, buildApiIndex(config, getAgentAddress(config)));
+      return sendJson(
+        res,
+        200,
+        buildApiIndex(config, getAgentAddress(config)),
+        req.method
+      );
     }
 
-    if (req.method === "GET" && path === "/api/health") {
+    if (isReadMethod(req.method) && path === "/api/health") {
+      const executionReady = Boolean(config.agentPrivateKey);
       return sendJson(res, 200, {
+        status: executionReady ? "healthy" : "degraded",
         ok: true,
+        service: "remifi-api",
+        version: "1.0.0",
         chainId: config.celoChainId,
-        executionReady: Boolean(config.agentPrivateKey),
+        agentId: config.agentId ?? null,
+        executionReady,
         vaultConfigured: Boolean(config.remifiVaultAddress),
         contactsCount: listContacts(config).length,
-      });
+        timestamp: new Date().toISOString(),
+      }, req.method);
     }
 
-    if (req.method === "GET" && path === "/api/agent") {
+    if (isReadMethod(req.method) && path === "/api/agent") {
       return sendJson(res, 200, {
         address: getAgentAddress(config),
         chainId: config.celoChainId,
         agentId: config.agentId ?? null,
         agentRegistry: agentRegistryId(config),
         registered: config.agentId != null,
-      });
+      }, req.method);
     }
 
-    if (req.method === "GET" && path === "/.well-known/mcp.json") {
-      return sendJson(res, 200, buildMcpManifest(config));
+    if (isReadMethod(req.method) && path === "/.well-known/mcp.json") {
+      return sendJson(res, 200, buildMcpManifest(config), req.method);
     }
 
     if (
-      req.method === "GET" &&
+      isReadMethod(req.method) &&
       path === "/.well-known/agent-registration.json"
     ) {
-      return sendJson(res, 200, buildAgentRegistrationFile(config));
+      return sendJson(res, 200, buildAgentRegistrationFile(config), req.method);
+    }
+
+    if (handle8004Probe(req, res, path, url, config)) {
+      return;
     }
 
     if (
       req.method === "POST" &&
-      (path === "/" || path === "/mcp" || path === "/api/mcp")
+      (path === "/" ||
+        path === "/mcp" ||
+        path === "/api/mcp" ||
+        path === "/.well-known/mcp.json")
     ) {
       return handleMcpJsonRpc(req, res, config);
     }
 
-    if (req.method === "GET" && path === "/api/claim") {
+    if (isReadMethod(req.method) && path === "/api/claim") {
       const claimId = url.searchParams.get("claimId") ?? url.searchParams.get("c");
       if (!claimId || !/^0x[a-fA-F0-9]{64}$/.test(claimId)) {
         return sendJson(res, 400, { error: "valid ?claimId=0x… is required" });
@@ -222,27 +337,38 @@ const server = createServer(async (req, res) => {
         claimId,
         vaultAddress: config.remifiVaultAddress ?? null,
         ...escrow,
-      });
+      }, req.method);
     }
 
     // ── Public ERC-8004 registration file (Celo docs + EIP-8004) ──
-    if (req.method === "GET" && path === "/.well-known/agent.json") {
+    if (isReadMethod(req.method) && path === "/.well-known/agent.json") {
       return sendJson(
         res,
         200,
-        buildAgentCard(config, getAgentAddress(config))
+        buildAgentCard(config, getAgentAddress(config)),
+        req.method
       );
     }
 
-    if (req.method === "GET" && path === "/.well-known/agent-card.json") {
-      return sendJson(res, 200, buildA2aAgentCard(config));
+    if (isReadMethod(req.method) && path === "/.well-known/agent-card.json") {
+      return sendJson(
+        res,
+        200,
+        buildA2aAgentCard(config, getAgentAddress(config)),
+        req.method
+      );
     }
 
     // ── x402: payment requirements for the premium quote endpoint ──
-    if (req.method === "GET" && path === "/api/x402/info") {
+    if (isReadMethod(req.method) && path === "/api/x402/info") {
       const resourceUrl = `${url.origin}/api/x402/premium-quote`;
       res.setHeader("Accept-Payment", "x402");
-      return sendJson(res, 200, buildPaymentRequirements(config, resourceUrl));
+      return sendJson(
+        res,
+        200,
+        buildPaymentRequirements(config, resourceUrl),
+        req.method
+      );
     }
 
     // ── x402-gated premium quote (402 → pay → retry with X-PAYMENT) ──
@@ -276,24 +402,6 @@ const server = createServer(async (req, res) => {
       if (!message) return sendJson(res, 400, { error: "message is required" });
       const quote = await quoteForMessage(config, message);
       return sendJson(res, 200, { paid: true, quote });
-    }
-
-    // Public MCP resource descriptors (8004scan probes only — never for x-api-key clients)
-    if (req.method === "GET" && !req.headers["x-api-key"]) {
-      const resource = mcpResourceForPath(path);
-      const hasClaimId =
-        url.searchParams.get("claimId") ?? url.searchParams.get("c");
-      const hasBalanceAddress = url.searchParams.get("address");
-      if (
-        resource &&
-        path !== "/api/health" &&
-        path !== "/api/agent" &&
-        path !== "/api/x402/info" &&
-        !(path === "/api/claim" && hasClaimId) &&
-        !(path === "/api/balance" && hasBalanceAddress)
-      ) {
-        return sendJson(res, 200, buildMcpResourceDescriptor(config, resource));
-      }
     }
 
     if (!authorized(req, config)) {

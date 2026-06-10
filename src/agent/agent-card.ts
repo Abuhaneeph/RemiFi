@@ -1,14 +1,30 @@
+import { keccak256, toBytes } from "viem";
 import type { Config } from "../config/index.js";
 import {
   MCP_PROTOCOL_VERSION,
+  mcpDiscoveryUrl,
+  mcpTransportUrl,
   REMIFI_MCP_PROMPTS,
-  REMIFI_MCP_RESOURCES,
   REMIFI_MCP_TOOLS,
 } from "./mcp-manifest.js";
 import { agentRegistryId } from "./registry-addresses.js";
+import {
+  agentCardUrl,
+  a2aJsonRpcUrl,
+  buildRemifiServices,
+  OASF_REPOSITORY,
+  OASF_VERSION,
+  REMIFI_OASF_SKILLS,
+} from "./services.js";
+
+export {
+  OASF_REPOSITORY,
+  OASF_VERSION,
+  REMIFI_OASF_SKILLS,
+} from "./services.js";
 
 export const REMIFI_AGENT_DESCRIPTION =
-  "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds. remifi.xyz · api.remifi.xyz · Telegram @remifi_bot";
+  "AI agent for cross-border remittances on Celo using stablecoins. Quote Mento routes, compare fees vs banks, and settle on chain in seconds. Multilingual (EN / ES / PT / FR).";
 
 /** Celo docs endpoint entry (`type` + `url`, optional wallet fields). */
 export interface AgentEndpoint {
@@ -23,6 +39,13 @@ export interface AgentService {
   name: string;
   endpoint: string;
   version?: string;
+  description?: string;
+  mcpTools?: string[];
+  mcpPrompts?: string[];
+  mcpResources?: string[];
+  a2aSkills?: string[];
+  skills?: string[];
+  domains?: string[];
 }
 
 /**
@@ -60,28 +83,131 @@ export const REMIFI_AGENT_TAGS = [
   "french",
 ] as const;
 
+/** A2A skill entry (Toppa-style card for 8004scan). */
+export interface A2aSkill {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+}
+
 /** A2A v0.3+ discovery card (/.well-known/agent-card.json). */
 export interface A2aAgentCard {
   name: string;
   description: string;
+  url: string;
+  provider: { organization: string; url: string };
   version: string;
-  iconUrl?: string;
+  capabilities: {
+    streaming: boolean;
+    pushNotifications: boolean;
+    extendedAgentCard: boolean;
+  };
   defaultInputModes: string[];
   defaultOutputModes: string[];
-  capabilities: { streaming: boolean };
-  supportedInterfaces: { protocolBinding: string; url: string }[];
-  skills: {
-    id: string;
-    name: string;
-    description: string;
-    tags: string[];
-    examples: string[];
-  }[];
+  skills: A2aSkill[];
+  extensions?: {
+    x402?: Record<string, unknown>;
+    mcp?: Record<string, unknown>;
+  };
 }
+
+/** Ten OASF-aligned A2A skills (matches Toppa 8004scan display). */
+export const REMIFI_A2A_SKILLS: readonly A2aSkill[] = [
+  {
+    id: "natural_language_processing_natural_language_generation_text_generation",
+    name: "Text Generation",
+    description:
+      "Multilingual remittance confirmations, quotes, and transfer receipts in EN / ES / PT / FR",
+    tags: [
+      "natural-language-processing",
+      "natural-language-generation",
+      "text-generation",
+    ],
+  },
+  {
+    id: "natural_language_processing_natural_language_understanding_contextual_comprehension",
+    name: "Contextual Comprehension",
+    description:
+      "Understands recipient names, amounts, corridors, and currencies from natural language",
+    tags: [
+      "natural-language-processing",
+      "natural-language-understanding",
+      "contextual-comprehension",
+    ],
+  },
+  {
+    id: "natural_language_processing_conversation_chatbot",
+    name: "Chatbot",
+    description:
+      "Conversational remittance flows via Telegram, WhatsApp, and web chat",
+    tags: ["natural-language-processing", "conversation", "chatbot"],
+  },
+  {
+    id: "natural_language_processing_information_retrieval_synthesis_search",
+    name: "Search",
+    description:
+      "Find contacts, corridors, Mento routes, and fee comparisons across corridors",
+    tags: [
+      "natural-language-processing",
+      "information-retrieval-synthesis",
+      "search",
+    ],
+  },
+  {
+    id: "tool_interaction_automation_workflow_automation",
+    name: "Workflow Automation",
+    description:
+      "End-to-end quote → confirm → transfer workflows with spending limits",
+    tags: ["tool-interaction", "automation", "workflow-automation"],
+  },
+  {
+    id: "problem_solving",
+    name: "Problem Solving",
+    description:
+      "Resolve routing, slippage, contact matching, and transfer issues",
+    tags: [
+      "natural-language-processing",
+      "analytical-and-logical-reasoning",
+      "problem-solving",
+    ],
+  },
+  {
+    id: "question_answering",
+    name: "Question Answering",
+    description:
+      "Answer questions on fees, delivery time, balances, and claim status",
+    tags: [
+      "natural-language-processing",
+      "information-retrieval-and-synthesis",
+      "question-answering",
+    ],
+  },
+  {
+    id: "cryptocurrency",
+    name: "Cryptocurrency",
+    description:
+      "Stablecoin remittances via USDC on Celo with Mento FX routes",
+    tags: ["technology", "blockchain", "cryptocurrency"],
+  },
+  {
+    id: "smart_contracts",
+    name: "Smart Contracts",
+    description:
+      "On-chain identity (ERC-8004), Mento swaps, and escrow vault claims",
+    tags: ["technology", "blockchain", "smart-contracts"],
+  },
+  {
+    id: "digital_payments",
+    name: "Digital Payments",
+    description:
+      "Cross-border digital remittance with x402 micropayments on Celo",
+    tags: ["finance-and-business", "finance", "digital-payments"],
+  },
+];
 
 export { agentRegistryId };
 
-/** Public base URL of the agent HTTP API. */
 function apiBaseUrl(config: Config): string {
   return (
     config.publicAgentApiUrl ?? `http://localhost:${config.agentApiPort}`
@@ -91,24 +217,22 @@ function apiBaseUrl(config: Config): string {
 /**
  * Build the registration file per Celo ERC-8004 docs + EIP-8004 registration-v1.
  *
- * @param walletAddress Agent's on-chain wallet (shown in the `wallet` endpoint).
+ * Service layout mirrors Toppa: 13 custom + MCP + A2A + OASF = 16 endpoints.
  */
 export function buildAgentCard(
   config: Config,
   walletAddress?: string | null
 ): AgentCard {
   const api = apiBaseUrl(config);
-  const web = config.publicBaseUrl?.replace(/\/$/, "");
   const premiumQuote = `${api}/api/x402/premium-quote`;
+  const cardUrl = agentCardUrl(config);
 
-  const agentCardUrl = web ? `${web}/.well-known/agent-card.json` : undefined;
-
-  const endpoints: AgentEndpoint[] = [];
-  if (agentCardUrl) {
-    endpoints.push({ type: "a2a", url: agentCardUrl });
-  }
-  endpoints.push({ type: "http", url: api });
-  endpoints.push({ type: "x402", url: premiumQuote });
+  const endpoints: AgentEndpoint[] = [
+    { type: "a2a", url: cardUrl },
+    { type: "http", url: api },
+    { type: "mcp", url: mcpDiscoveryUrl(config) },
+    { type: "x402", url: premiumQuote },
+  ];
   if (walletAddress) {
     endpoints.push({
       type: "wallet",
@@ -117,36 +241,18 @@ export function buildAgentCard(
     });
   }
 
-  const services: AgentService[] = [];
-  if (web) services.push({ name: "web", endpoint: web });
-  if (agentCardUrl) {
-    services.push({ name: "A2A", endpoint: agentCardUrl, version: "0.3.0" });
-  }
-  services.push({ name: "HTTP", endpoint: api, version: "1.0.0" });
-  services.push({ name: "x402", endpoint: premiumQuote, version: "1.0.0" });
-  services.push({
-    name: "MCP",
-    endpoint: api,
-    version: MCP_PROTOCOL_VERSION,
-    mcpTools: [...REMIFI_MCP_TOOLS],
-    mcpPrompts: [...REMIFI_MCP_PROMPTS],
-    mcpResources: [...REMIFI_MCP_RESOURCES],
-  } as AgentService & {
-    mcpTools: string[];
-    mcpPrompts: string[];
-    mcpResources: string[];
-  });
-
   return {
     type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
     name: config.agentName,
     description: config.agentDescription,
     tags: [...REMIFI_AGENT_TAGS],
     image:
-      config.agentImage ??
-      "https://remifi.xyz/assets/remifi-agent.png",
+      config.agentImage ?? "https://remifi.xyz/assets/remifi-agent.png",
     endpoints,
-    services,
+    services: buildRemifiServices(config, {
+      mcpTools: REMIFI_MCP_TOOLS,
+      mcpPrompts: REMIFI_MCP_PROMPTS,
+    }),
     x402Support: true,
     active: true,
     registrations:
@@ -157,39 +263,52 @@ export function buildAgentCard(
   };
 }
 
-/** A2A v0.3+ agent card for /.well-known/agent-card.json probes. */
-export function buildA2aAgentCard(config: Config): A2aAgentCard {
+/** A2A agent card — Toppa format, hosted on API `/.well-known/agent-card.json`. */
+export function buildA2aAgentCard(
+  config: Config,
+  walletAddress?: string | null
+): A2aAgentCard {
   const api = apiBaseUrl(config);
+  const payTo = walletAddress ?? null;
+
   return {
     name: config.agentName,
     description: config.agentDescription,
-    version: "1.0.0",
-    iconUrl: config.agentImage ?? "https://remifi.xyz/assets/remifi-agent.png",
-    defaultInputModes: ["text/plain", "application/json"],
-    defaultOutputModes: ["text/plain", "application/json"],
-    capabilities: { streaming: false },
-    supportedInterfaces: [{ protocolBinding: "JSONRPC", url: api }],
-    skills: [
-      {
-        id: "send_money",
-        name: "Send remittance",
+    url: a2aJsonRpcUrl(config),
+    provider: { organization: config.agentName, url: api },
+    version: "2.0.0",
+    capabilities: {
+      streaming: false,
+      pushNotifications: false,
+      extendedAgentCard: false,
+    },
+    defaultInputModes: ["text"],
+    defaultOutputModes: ["text"],
+    skills: REMIFI_A2A_SKILLS.map((s) => ({ ...s, tags: [...s.tags] })),
+    extensions: {
+      x402: {
+        spec: "https://github.com/coinbase/x402",
+        currency: config.x402Token,
+        chain: "Celo",
+        network: config.x402Network,
+        priceUsd: config.x402PriceUsd,
+        ...(payTo ? { payTo } : {}),
         description:
-          "Quote and send cross-border stablecoin remittances on Celo via Mento.",
-        tags: ["remittance", "celo", "stablecoin"],
-        examples: [
-          "Send $50 to my mom in the Philippines",
-          "Enviar 50 dólares a mi mamá en Filipinas",
-        ],
+          "Premium quotes use x402 micropayments on Celo. Discovery and health endpoints are free.",
       },
-      {
-        id: "get_quote",
-        name: "Get quote",
-        description: "Get a live Mento route quote with fee comparison.",
-        tags: ["quote", "mento"],
-        examples: ["Quote $100 to Nigeria", "How much to send €50 to Brazil?"],
+      mcp: {
+        endpoint: mcpTransportUrl(config),
+        discovery: mcpDiscoveryUrl(config),
+        transport: "Streamable HTTP",
+        description: `MCP endpoint for direct tool invocation (${REMIFI_MCP_TOOLS.length} tools)`,
       },
-    ],
+    },
   };
+}
+
+/** keccak256 of canonical agent registration JSON (8004scan agentHash extension). */
+export function computeAgentMetadataHash(card: AgentCard): `0x${string}` {
+  return keccak256(toBytes(JSON.stringify(card)));
 }
 
 /**
