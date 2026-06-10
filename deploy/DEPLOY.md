@@ -51,6 +51,15 @@ Render sets `PORT` automatically — the server binds `0.0.0.0:PORT`.
 curl https://YOUR-SERVICE.onrender.com/api/health
 ```
 
+### Custom domain (`api.remifi.xyz`)
+
+1. Render → **remifi-api** → **Settings** → **Custom Domains** → add `api.remifi.xyz`.
+2. At your DNS host (where `remifi.xyz` is managed), add the **CNAME** Render shows:
+   - Name: `api`
+   - Value: `remifi-api.onrender.com` (or your service hostname)
+3. **Do not** add `api.remifi.xyz` to Vercel. If both apex and `api` point to Vercel, `/api/health` returns a Next.js 404 page instead of JSON.
+4. Set `PUBLIC_AGENT_API_URL=https://api.remifi.xyz` on Render after DNS verifies.
+
 ### Web app
 
 In `web/.env.local` (or Vercel env):
