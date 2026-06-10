@@ -8,6 +8,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { celoChain } from "../lib/thirdweb";
 import { ChevronLeftIcon } from "./icons";
 import { ConnectWallet } from "./ConnectWallet";
+import { MoonPayOnRamp } from "./MoonPayOnRamp";
 
 export function DepositContent() {
   const { address, isConnected } = useWallet();
@@ -55,7 +56,17 @@ export function DepositContent() {
           </div>
         ) : (
           <>
-            <section className="mt-6 flex flex-col items-center rounded-[var(--radius-lg)] border border-line bg-surface p-5">
+            <section className="mt-6 rounded-[var(--radius-lg)] border border-line bg-surface p-5">
+              <p className="text-sm font-semibold text-ink">{t("deposit.fiatSection")}</p>
+              <p className="mt-1 text-sm text-muted">{t("deposit.fiatSectionHint")}</p>
+              <MoonPayOnRamp />
+            </section>
+
+            <p className="my-5 text-center text-xs font-semibold uppercase tracking-wide text-soft">
+              {t("deposit.orSendCrypto")}
+            </p>
+
+            <section className="flex flex-col items-center rounded-[var(--radius-lg)] border border-line bg-surface p-5">
               {qrDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
