@@ -25,9 +25,11 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/src ./src
+COPY tsconfig.json ./
 COPY data ./data
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh && mkdir -p /data && chown -R remifi:remifi /app /data
+RUN npm install tsx && chmod +x /entrypoint.sh && mkdir -p /data && chown -R remifi:remifi /app /data
 
 USER remifi
 
