@@ -2,7 +2,19 @@
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "Remifi",
   "description": "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds. remifi.xyz · api.remifi.xyz · Telegram @remifi_bot",
-  "tags": ["multilingual", "remittance", "celo", "mento", "stablecoin", "telegram", "x402", "english", "spanish", "portuguese", "french"],
+  "tags": [
+    "multilingual",
+    "remittance",
+    "celo",
+    "mento",
+    "stablecoin",
+    "telegram",
+    "x402",
+    "english",
+    "spanish",
+    "portuguese",
+    "french"
+  ],
   "image": "https://remifi.xyz/assets/remifi-agent.png",
   "endpoints": [
     {
@@ -31,11 +43,23 @@
     {
       "name": "A2A",
       "endpoint": "https://remifi.xyz/.well-known/agent-card.json",
-      "version": "0.3.0"
+      "version": "0.3.0",
+      "a2aSkills": [
+        "natural_language_processing/information_retrieval_synthesis/search",
+        "natural_language_processing/natural_language_generation/summarization",
+        "natural_language_processing/conversation/chatbot",
+        "tool_interaction/workflow_automation",
+        "tool_interaction/api_schema_understanding"
+      ]
     },
     {
-      "name": "HTTP",
+      "name": "api",
       "endpoint": "https://api.remifi.xyz",
+      "version": "1.0.0"
+    },
+    {
+      "name": "health",
+      "endpoint": "https://api.remifi.xyz/api/health",
       "version": "1.0.0"
     },
     {
@@ -88,6 +112,27 @@
         "agent_info",
         "premium_quote"
       ]
+    },
+    {
+      "name": "OASF",
+      "endpoint": "https://github.com/agntcy/oasf/",
+      "version": "0.8.0",
+      "skills": [
+        "natural_language_processing/information_retrieval_synthesis/search",
+        "natural_language_processing/natural_language_generation/summarization",
+        "natural_language_processing/conversation/chatbot",
+        "tool_interaction/workflow_automation",
+        "tool_interaction/api_schema_understanding"
+      ],
+      "domains": [
+        "technology/blockchain/cryptocurrency",
+        "finance_and_business/finance",
+        "technology/blockchain"
+      ]
+    },
+    {
+      "name": "agentWallet",
+      "endpoint": "eip155:42220:0xB98cFAC37b8bD7f549789718aC17F8aEE7cE0c37"
     }
   ],
   "x402Support": true,
@@ -98,5 +143,9 @@
       "agentRegistry": "eip155:42220:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
     }
   ],
-  "supportedTrust": ["reputation", "crypto-economic", "tee-attestation"]
+  "supportedTrust": [
+    "reputation",
+    "crypto-economic",
+    "tee-attestation"
+  ]
 }

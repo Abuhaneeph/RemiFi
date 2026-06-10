@@ -1,3 +1,4 @@
+import { keccak256, toBytes } from "viem";
 import type { Config } from "../config/index.js";
 import {
   MCP_PROTOCOL_VERSION,
@@ -6,6 +7,108 @@ import {
   REMIFI_MCP_TOOLS,
 } from "./mcp-manifest.js";
 import { agentRegistryId } from "./registry-addresses.js";
+
+/** OASF taxonomy repo (8004scan compliance). */
+export const OASF_REPOSITORY = "https://github.com/agntcy/oasf/";
+export const OASF_VERSION = "0.8.0";
+
+/** Valid OASF skill slugs — avoids IA027 unknown-category warnings. */
+export const REMIFI_OASF_SKILLS = [
+  "natural_language_processing/information_retrieval_synthesis/search",
+  "natural_language_processing/natural_language_generation/summarization",
+  "natural_language_processing/conversation/chatbot",
+  "tool_interaction/workflow_automation",
+  "tool_interaction/api_schema_understanding",
+] as const;
+
+/** Valid OASF domain slugs for remittance / payments on Celo. */
+export const REMIFI_OASF_DOMAINS = [
+  "technology/blockchain/cryptocurrency",
+  "finance_and_business/finance",
+  "technology/blockchain",
+] as const;
+
+/** A2A Agent Card skills (8004scan counts these for service health). */
+export const REMIFI_A2A_SKILLS = [
+  {
+    id: "send_money",
+    name: "Send remittance",
+    description:
+      "Quote and send cross-border stablecoin remittances on Celo via Mento.",
+    tags: ["remittance", "celo", "stablecoin"],
+    examples: [
+      "Send $50 to my mom in the Philippines",
+      "Enviar 50 dólares a mi mamá en Filipinas",
+    ],
+  },
+  {
+    id: "get_quote",
+    name: "Get quote",
+    description: "Get a live Mento route quote with fee comparison vs banks.",
+    tags: ["quote", "mento", "fees"],
+    examples: ["Quote $100 to Nigeria", "How much to send €50 to Brazil?"],
+  },
+  {
+    id: "check_balance",
+    name: "Check balance",
+    description: "Look up on-chain USDC and stablecoin balances on Celo.",
+    tags: ["balance", "celo"],
+    examples: ["What's my balance?", "Check my USDC balance"],
+  },
+  {
+    id: "resolve_contact",
+    name: "Resolve contact",
+    description: "Match a recipient name to a saved contact or wallet.",
+    tags: ["contacts", "recipients"],
+    examples: ["Send to Mom", "Transfer to Maria"],
+  },
+  {
+    id: "fee_comparison",
+    name: "Compare fees",
+    description: "Compare Remifi fees and savings against traditional remittance.",
+    tags: ["fees", "savings"],
+    examples: ["How much do I save vs Western Union?", "Compare fees for $200"],
+  },
+  {
+    id: "multilingual_intent",
+    name: "Multilingual intent",
+    description:
+      "Parse remittance requests in English, Spanish, Portuguese, or French.",
+    tags: ["multilingual", "nlp"],
+    examples: [
+      "Envoyer 50 euros à mon frère",
+      "Transferir 100 reais para minha mãe",
+    ],
+  },
+  {
+    id: "claim_escrow",
+    name: "Claim escrow",
+    description: "Look up and claim phone-only escrow transfers.",
+    tags: ["escrow", "claim"],
+    examples: ["Claim my transfer", "Check claim status"],
+  },
+  {
+    id: "transfer_history",
+    name: "Transfer history",
+    description: "List past remittance transactions and statuses.",
+    tags: ["history", "transactions"],
+    examples: ["Show my last transfers", "Transaction history"],
+  },
+  {
+    id: "x402_payments",
+    name: "x402 payments",
+    description: "Pay for premium quotes via HTTP 402 micropayments on Celo.",
+    tags: ["x402", "payments"],
+    examples: ["Get premium quote", "Pay for detailed route analysis"],
+  },
+  {
+    id: "manage_contacts",
+    name: "Manage contacts",
+    description: "Add, sync, or import recipient contacts for remittances.",
+    tags: ["contacts", "recipients"],
+    examples: ["Add Mom as a contact", "Sync my phone contacts"],
+  },
+] as const;
 
 export const REMIFI_AGENT_DESCRIPTION =
   "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds. remifi.xyz · api.remifi.xyz · Telegram @remifi_bot";
@@ -23,6 +126,12 @@ export interface AgentService {
   name: string;
   endpoint: string;
   version?: string;
+  mcpTools?: string[];
+  mcpPrompts?: string[];
+  mcpResources?: string[];
+  a2aSkills?: string[];
+  skills?: string[];
+  domains?: string[];
 }
 
 /**
@@ -117,12 +226,24 @@ export function buildAgentCard(
     });
   }
 
+  const healthUrl = `${api}/api/health`;
+  const walletCaip10 =
+    walletAddress != null
+      ? `eip155:${config.celoChainId}:${walletAddress}`
+      : undefined;
+
   const services: AgentService[] = [];
   if (web) services.push({ name: "web", endpoint: web });
   if (agentCardUrl) {
-    services.push({ name: "A2A", endpoint: agentCardUrl, version: "0.3.0" });
+    services.push({
+      name: "A2A",
+      endpoint: agentCardUrl,
+      version: "0.3.0",
+      a2aSkills: [...REMIFI_OASF_SKILLS],
+    });
   }
-  services.push({ name: "HTTP", endpoint: api, version: "1.0.0" });
+  services.push({ name: "api", endpoint: api, version: "1.0.0" });
+  services.push({ name: "health", endpoint: healthUrl, version: "1.0.0" });
   services.push({ name: "x402", endpoint: premiumQuote, version: "1.0.0" });
   services.push({
     name: "MCP",
@@ -131,11 +252,17 @@ export function buildAgentCard(
     mcpTools: [...REMIFI_MCP_TOOLS],
     mcpPrompts: [...REMIFI_MCP_PROMPTS],
     mcpResources: [...REMIFI_MCP_RESOURCES],
-  } as AgentService & {
-    mcpTools: string[];
-    mcpPrompts: string[];
-    mcpResources: string[];
   });
+  services.push({
+    name: "OASF",
+    endpoint: OASF_REPOSITORY,
+    version: OASF_VERSION,
+    skills: [...REMIFI_OASF_SKILLS],
+    domains: [...REMIFI_OASF_DOMAINS],
+  });
+  if (walletCaip10) {
+    services.push({ name: "agentWallet", endpoint: walletCaip10 });
+  }
 
   return {
     type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
@@ -169,27 +296,13 @@ export function buildA2aAgentCard(config: Config): A2aAgentCard {
     defaultOutputModes: ["text/plain", "application/json"],
     capabilities: { streaming: false },
     supportedInterfaces: [{ protocolBinding: "JSONRPC", url: api }],
-    skills: [
-      {
-        id: "send_money",
-        name: "Send remittance",
-        description:
-          "Quote and send cross-border stablecoin remittances on Celo via Mento.",
-        tags: ["remittance", "celo", "stablecoin"],
-        examples: [
-          "Send $50 to my mom in the Philippines",
-          "Enviar 50 dólares a mi mamá en Filipinas",
-        ],
-      },
-      {
-        id: "get_quote",
-        name: "Get quote",
-        description: "Get a live Mento route quote with fee comparison.",
-        tags: ["quote", "mento"],
-        examples: ["Quote $100 to Nigeria", "How much to send €50 to Brazil?"],
-      },
-    ],
+    skills: REMIFI_A2A_SKILLS.map((skill) => ({ ...skill, tags: [...skill.tags] })),
   };
+}
+
+/** keccak256 of canonical agent registration JSON (8004scan agentHash extension). */
+export function computeAgentMetadataHash(card: AgentCard): `0x${string}` {
+  return keccak256(toBytes(JSON.stringify(card)));
 }
 
 /**

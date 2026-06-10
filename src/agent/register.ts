@@ -5,7 +5,11 @@ import {
   getPublicClient,
   getWalletClient,
 } from "../wallet/client.js";
-import { resolveAgentUri } from "./agent-card.js";
+import {
+  buildAgentCard,
+  computeAgentMetadataHash,
+  resolveAgentUri,
+} from "./agent-card.js";
 
 /** Minimal ERC-8004 Identity Registry ABI (the parts Remifi uses). */
 export const IDENTITY_REGISTRY_ABI = [
@@ -55,6 +59,17 @@ export const IDENTITY_REGISTRY_ABI = [
       { name: "agentURI", type: "string", indexed: false },
       { name: "owner", type: "address", indexed: true },
     ],
+  },
+  {
+    type: "function",
+    name: "setMetadata",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "key", type: "string" },
+      { name: "value", type: "bytes" },
+    ],
+    outputs: [],
   },
 ] as const;
 
@@ -187,4 +202,32 @@ export async function setAgentUri(
   const txHash = await walletClient.writeContract(request);
   await publicClient.waitForTransactionReceipt({ hash: txHash });
   return txHash;
+}
+
+/**
+ * Set on-chain `agentHash` metadata for HTTP/HTTPS agentURI integrity (8004scan WA040).
+ *
+ * Computes keccak256 of the current registration file JSON.
+ */
+export async function setAgentHash(
+  config: Config,
+  agentId: number,
+  walletAddress?: string | null
+): Promise<{ txHash: Hex; hash: `0x${string}` }> {
+  const account = getAgentAccount(config);
+  const publicClient = getPublicClient(config);
+  const walletClient = getWalletClient(config);
+  const card = buildAgentCard(config, walletAddress ?? account.address);
+  const hash = computeAgentMetadataHash(card);
+
+  const { request } = await publicClient.simulateContract({
+    account,
+    address: config.identityRegistryAddress as Address,
+    abi: IDENTITY_REGISTRY_ABI,
+    functionName: "setMetadata",
+    args: [BigInt(agentId), "agentHash", hash],
+  });
+  const txHash = await walletClient.writeContract(request);
+  await publicClient.waitForTransactionReceipt({ hash: txHash });
+  return { txHash, hash };
 }
