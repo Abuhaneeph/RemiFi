@@ -220,8 +220,8 @@ export async function fetchProfile(): Promise<ProfileResponse> {
 
 export async function fetchBalances(address: string): Promise<BalanceResponse> {
   const res = await fetch(
-    `${API_BASE}/api/balance?address=${encodeURIComponent(address)}`,
-    { headers: headers() }
+    `${API_BASE}/api/balance?address=${encodeURIComponent(address)}&_=${Date.now()}`,
+    { headers: headers(), cache: "no-store" }
   );
   return handle<BalanceResponse>(res);
 }

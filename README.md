@@ -140,6 +140,21 @@ Point OpenClaw at this repo workspace and load the **remifi** skill (`openclaw.j
 npm test
 ```
 
+### 6. Deploy (Render + Hostinger VPS)
+
+| Component | Where |
+|-----------|--------|
+| HTTP API (`npm run serve`) | **Render** — Docker (`Dockerfile`, `render.yaml`) |
+| OpenClaw / Telegram bot | **Hostinger VPS** — `openclaw gateway run` 24/7 |
+
+```bash
+# Local prod-like API
+docker compose up --build
+
+# Full guide
+# see deploy/DEPLOY.md
+```
+
 ---
 
 ## Agent API

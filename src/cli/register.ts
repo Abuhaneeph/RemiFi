@@ -2,9 +2,19 @@
 import { loadConfig } from "../config/index.js";
 import { getAgentAccount } from "../wallet/client.js";
 import { buildAgentCard, resolveAgentUri } from "../agent/agent-card.js";
-import { getAgentWallet, registerAgent } from "../agent/register.js";
+import {
+  getAgentWallet,
+  registerAgent,
+  setAgentUri,
+} from "../agent/register.js";
+import type { Config } from "../config/index.js";
+
+/** Public Remifi URLs used for ERC-8004 registration when env vars are unset. */
+const REMIFI_WEBSITE = "https://remifi.xyz";
+const REMIFI_API = "https://api.remifi.xyz";
 
 interface Args {
+  command?: string;
   uri?: string;
   dryRun: boolean;
 }
@@ -14,19 +24,48 @@ function parseArgs(): Args {
   const args: Args = { dryRun: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    if (!args.command && !a.startsWith("-")) {
+      args.command = a.toLowerCase();
+      continue;
+    }
     if (a === "--uri" && argv[i + 1]) args.uri = argv[++i];
     else if (a === "--dry-run" || a === "-n") args.dryRun = true;
   }
+  if (!args.command) args.command = "register";
   return args;
+}
+
+const CELO_SEPOLIA_CHAIN_ID = 11142220;
+
+function scanBaseUrl(chainId: number): string {
+  return chainId === CELO_SEPOLIA_CHAIN_ID
+    ? "https://testnet.8004scan.io"
+    : "https://8004scan.io";
+}
+
+function scanProfileUrl(chainId: number, agentId: number): string {
+  if (chainId === CELO_SEPOLIA_CHAIN_ID) {
+    return `${scanBaseUrl(chainId)}/agents/celo-sepolia/${agentId}`;
+  }
+  return `${scanBaseUrl(chainId)}/agent/eip155:${chainId}:0x8004A818BFB912233c491871b3d84c89A494BD9e/${agentId}`;
+}
+
+/** Ensure registration uses live Remifi URLs, not localhost fallbacks. */
+function configForRegistration(config: Config): Config {
+  return {
+    ...config,
+    publicBaseUrl: config.publicBaseUrl ?? REMIFI_WEBSITE,
+    publicAgentApiUrl: config.publicAgentApiUrl ?? REMIFI_API,
+  };
 }
 
 async function main() {
   const args = parseArgs();
-  const config = loadConfig();
+  const config = configForRegistration(loadConfig());
 
   if (!config.agentPrivateKey) {
     console.error(
-      "Error: AGENT_PRIVATE_KEY is required to register on ERC-8004."
+      "Error: AGENT_PRIVATE_KEY is required for ERC-8004 transactions."
     );
     process.exit(1);
   }
@@ -35,7 +74,47 @@ async function main() {
   const agentUri = args.uri ?? resolveAgentUri(config);
   const card = buildAgentCard(config, account.address);
 
+  if (args.command === "update-uri" || args.command === "set-uri") {
+    if (config.agentId == null) {
+      console.error(
+        "Error: AGENT_ID is required to update URI. Set AGENT_ID in .env"
+      );
+      process.exit(1);
+    }
+    if (agentUri.startsWith("data:")) {
+      console.error(
+        "Error: Set PUBLIC_AGENT_API_URL or PUBLIC_BASE_URL (or --uri) to a public HTTPS URL before update-uri."
+      );
+      process.exit(1);
+    }
+
+    console.log("\n--- ERC-8004 update agentURI ---");
+    console.log(`Website:   ${config.publicBaseUrl}`);
+    console.log(`Agent ID:  ${config.agentId}`);
+    console.log(`New URI:   ${agentUri}`);
+    console.log("\nAgent card (hosted file should match):");
+    console.log(JSON.stringify(card, null, 2));
+
+    if (args.dryRun) {
+      console.log("\n(dry run — no transaction sent)");
+      return;
+    }
+
+    console.log("\nSubmitting setAgentURI() transaction…");
+    const txHash = await setAgentUri(config, config.agentId, agentUri);
+    const base =
+      config.celoChainId === 11142220
+        ? "https://celo-sepolia.blockscout.com"
+        : "https://celoscan.io";
+    console.log("\n--- Updated ---");
+    console.log(`Tx:        ${base}/tx/${txHash}`);
+    console.log(`Profile:   ${scanProfileUrl(config.celoChainId, config.agentId)}`);
+    return;
+  }
+
   console.log("\n--- ERC-8004 registration ---");
+  console.log(`Website:   ${config.publicBaseUrl}`);
+  console.log(`API:       ${config.publicAgentApiUrl}`);
   console.log(`Registry:  ${config.identityRegistryAddress}`);
   console.log(`Chain:     ${config.celoChainId}`);
   console.log(`Owner:     ${account.address}`);
@@ -57,10 +136,10 @@ async function main() {
   console.log(`Tx:        ${result.explorerUrl}`);
   console.log(`Registry:  ${result.agentRegistry}`);
   if (wallet) console.log(`Wallet:    ${wallet}`);
-  console.log(`8004scan:  ${result.scanUrl}`);
+  console.log(`Profile:   ${scanProfileUrl(config.celoChainId, result.agentId)}`);
   console.log(
-    `\nNext: add AGENT_ID=${result.agentId} to your .env so the hosted ` +
-      `registration file binds to this on-chain identity.`
+    `\nNext: add AGENT_ID=${result.agentId} to your .env, deploy your API, then run:\n` +
+      `  npm run register -- update-uri`
   );
 }
 

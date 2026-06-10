@@ -118,5 +118,128 @@
     "txHash": "0x82fa472b787105e33669c0e99dcbe9cdac6af40f9d4bc3079ff59a4b1e1b264f",
     "confirmedAt": "2026-06-09T09:44:08.041Z",
     "deliveryMethod": "wallet"
+  },
+  {
+    "id": "122d4060-5488-48bd-a7fc-ecb720c48bb5",
+    "intent": {
+      "locale": "en",
+      "amount": 1,
+      "sourceCurrency": "USD",
+      "destinationCountry": "PH",
+      "recipientName": "mom",
+      "recipientWallet": "0x45550b02878670c9796AaDffa4a9Cb189C2dcf2d",
+      "frequency": "once",
+      "rawMessage": "send $1 to mom in Philippines"
+    },
+    "status": "confirmed",
+    "createdAt": "2026-06-10T08:32:57.338Z",
+    "feeComparison": [
+      {
+        "provider": "mento",
+        "sendAmountUsd": 1,
+        "feeUsd": 0,
+        "recipientReceives": 1,
+        "effectiveRate": 1
+      },
+      {
+        "provider": "western_union",
+        "sendAmountUsd": 1,
+        "feeUsd": 0.045,
+        "recipientReceives": 0.955,
+        "effectiveRate": 0.955
+      },
+      {
+        "provider": "wise",
+        "sendAmountUsd": 1,
+        "feeUsd": 0.012,
+        "recipientReceives": 0.988,
+        "effectiveRate": 0.988
+      }
+    ],
+    "txHash": "0x5fc98cfb9cee34f649e3a3be46ffd01bc45c950dfd8a909c61f0e9c445658645",
+    "confirmedAt": "2026-06-10T08:33:02.671Z",
+    "deliveryMethod": "wallet"
+  },
+  {
+    "id": "a91e4a59-f45c-413a-aa88-7ca99a99298f",
+    "intent": {
+      "locale": "en",
+      "amount": 1,
+      "sourceCurrency": "USD",
+      "destinationCountry": "PH",
+      "recipientName": "mom",
+      "recipientWallet": "0x45550b02878670c9796AaDffa4a9Cb189C2dcf2d",
+      "frequency": "once",
+      "rawMessage": "send $1 to mom in Philippines"
+    },
+    "status": "confirmed",
+    "createdAt": "2026-06-10T08:39:13.259Z",
+    "feeComparison": [
+      {
+        "provider": "mento",
+        "sendAmountUsd": 1,
+        "feeUsd": 0,
+        "recipientReceives": 1,
+        "effectiveRate": 1
+      },
+      {
+        "provider": "western_union",
+        "sendAmountUsd": 1,
+        "feeUsd": 0.045,
+        "recipientReceives": 0.955,
+        "effectiveRate": 0.955
+      },
+      {
+        "provider": "wise",
+        "sendAmountUsd": 1,
+        "feeUsd": 0.012,
+        "recipientReceives": 0.988,
+        "effectiveRate": 0.988
+      }
+    ],
+    "txHash": "0x185a68cebf2230c2f594c47f9a7cbc1a258ba4922e9bdf2fef0e4172575c9485",
+    "confirmedAt": "2026-06-10T08:39:18.519Z",
+    "deliveryMethod": "wallet"
+  },
+  {
+    "id": "63379a73-92b5-4b00-9693-4961132c7b5f",
+    "intent": {
+      "locale": "en",
+      "amount": 1,
+      "sourceCurrency": "USD",
+      "destinationCountry": "PH",
+      "recipientName": "mom",
+      "recipientWallet": "0x45550b02878670c9796AaDffa4a9Cb189C2dcf2d",
+      "frequency": "once",
+      "rawMessage": "send $1 to mom in Philippines"
+    },
+    "status": "confirmed",
+    "createdAt": "2026-06-10T08:44:01.985Z",
+    "feeComparison": [
+      {
+        "provider": "mento",
+        "sendAmountUsd": 1,
+        "feeUsd": 0,
+        "recipientReceives": 1,
+        "effectiveRate": 1
+      },
+      {
+        "provider": "western_union",
+        "sendAmountUsd": 1,
+        "feeUsd": 0.045,
+        "recipientReceives": 0.955,
+        "effectiveRate": 0.955
+      },
+      {
+        "provider": "wise",
+        "sendAmountUsd": 1,
+        "feeUsd": 0.012,
+        "recipientReceives": 0.988,
+        "effectiveRate": 0.988
+      }
+    ],
+    "txHash": "0x152c0250841a1916ad63ec616d370b42cbbf9a52cd21bfb7685a1dbefef2eabe",
+    "confirmedAt": "2026-06-10T08:44:07.276Z",
+    "deliveryMethod": "wallet"
   }
 ]

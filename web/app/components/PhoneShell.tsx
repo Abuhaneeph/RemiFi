@@ -10,7 +10,7 @@ export function PhoneShell({
 }) {
   return (
     <div className="phone">
-      {children}
+      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       {nav && <BottomNav active={nav} />}
     </div>
   );

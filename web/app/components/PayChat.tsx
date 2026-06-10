@@ -5,7 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { Avatar } from "./Avatar";
 import { AgentStatusBanner } from "./AgentStatusBanner";
-import { ConfirmationModal, type ConfirmationDetail } from "./ConfirmationModal";
+import {
+  formatConfirmDetails,
+  formatQuoteText,
+  formatSuccessText,
+} from "../lib/pay-format";
 import { ASSISTANT, PROFILE } from "../data/people";
 import { BoltIcon, ChevronLeftIcon, MicIcon } from "./icons";
 import { useAgentApi } from "../context/AgentApiContext";
@@ -54,65 +58,13 @@ type Message =
     }
   | { id: string; role: "user"; text: string };
 
-type PendingPayment = {
-  message: string;
-  recipientName: string;
-  quote: QuoteResponse;
-  details: ConfirmationDetail[];
-  ctx?: TransferContext;
-};
-
-function quoteDetails(
-  quote: QuoteResponse,
-  ctx: TransferContext | undefined,
-  t: (key: string) => string
-): ConfirmationDetail[] {
-  const { intent } = quote;
-  const rows: ConfirmationDetail[] = [
-    { label: "To", value: intent.recipientName ?? "Recipient" },
-    {
-      label: "Amount",
-      value: `${intent.amount} ${intent.sourceCurrency}`,
-    },
-  ];
-  if (quote.recipientReceives != null && quote.destinationCurrency) {
-    rows.push({
-      label: "They receive",
-      value: `~${quote.recipientReceives.toFixed(2)} ${quote.destinationCurrency}`,
-    });
-  }
-  if (quote.mentoPair) rows.push({ label: "Route", value: quote.mentoPair });
-  if (quote.mentoFeeUsd != null) {
-    rows.push({ label: "Mento fee", value: `~$${quote.mentoFeeUsd.toFixed(2)}` });
-  }
-  if (quote.estimatedGasUsd != null) {
-    rows.push({
-      label: "Est. gas",
-      value: `~$${quote.estimatedGasUsd.toFixed(4)}`,
-    });
-  }
-  if (ctx?.recipientWallet) {
-    rows.push({
-      label: "Wallet",
-      value: `${ctx.recipientWallet.slice(0, 6)}…${ctx.recipientWallet.slice(-4)}`,
-    });
-  } else if (ctx?.recipientPhone) {
-    rows.push({ label: "Phone", value: ctx.recipientPhone });
-    rows.push({ label: "Delivery", value: t("pay.deliveryClaim") });
-  }
-  if (quote.deliveryMethod === "escrow") {
-    rows.push({ label: "Method", value: t("pay.methodEscrow") });
-  }
-  return rows;
-}
-
 export function PayChat() {
   const searchParams = useSearchParams();
   const presetTo = searchParams.get("to");
   const presetAmount = searchParams.get("amount");
   const presetWallet = searchParams.get("wallet");
   const { allPeople } = useContacts();
-  const { refreshBalances } = useAgentApi();
+  const { refreshBalancesAfterSend } = useAgentApi();
   const { t, locale } = useLanguage();
 
   const quickReplies = useMemo(
@@ -132,16 +84,12 @@ export function PayChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const presetSent = useRef(false);
   const [thinking, setThinking] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalPhase, setModalPhase] = useState<"confirm" | "success">("confirm");
-  const [submitting, setSubmitting] = useState(false);
-  const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(
-    null
-  );
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [alertQuote, setAlertQuote] = useState<QuoteResponse | null>(null);
   const [alertOpen, setAlertOpen] = useState(false);
   const stopSpeechRef = useRef<(() => void) | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMessages([{ id: "intro", role: "bot", text: t("pay.intro") }]);
@@ -219,9 +167,13 @@ export function PayChat() {
       }
 
       appendBot({
-        text: `${quote.summary}${quote.savings ? `\n${quote.savings}` : ""}${extra}`,
+        text: `${formatQuoteText(quote, recipientName, t)}${extra}`,
         confirm: {
-          label: `Confirm ${quote.intent.amount} ${quote.intent.sourceCurrency} to ${recipientName}`,
+          label: t("pay.confirmSend", {
+            amount: quote.intent.amount,
+            currency: quote.intent.sourceCurrency,
+            name: recipientName,
+          }),
           message: apiMessage,
           quote,
           ctx,
@@ -254,32 +206,35 @@ export function PayChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [presetTo, presetAmount, presetWallet]);
 
-  const openPaymentModal = (confirm: {
-    message: string;
-    quote: QuoteResponse;
-    ctx?: TransferContext;
-  }) => {
-    setPendingPayment({
-      message: confirm.message,
-      recipientName: confirm.quote.intent.recipientName ?? "your recipient",
-      quote: confirm.quote,
-      details: quoteDetails(confirm.quote, confirm.ctx, t),
-      ctx: confirm.ctx,
-    });
-    setModalPhase("confirm");
-    setModalOpen(true);
+  const dismissConfirm = (msgId: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId && m.role === "bot" ? { ...m, confirm: undefined } : m
+      )
+    );
   };
 
-  const handleConfirmPayment = async () => {
-    if (!pendingPayment || submitting) return;
-    setSubmitting(true);
+  const handleInlineConfirm = async (
+    msgId: string,
+    confirm: NonNullable<Extract<Message, { role: "bot" }>["confirm"]>
+  ) => {
+    if (confirmingId) return;
+    setConfirmingId(msgId);
+    const recipientName =
+      confirm.quote.intent.recipientName ?? "your recipient";
+
     try {
-      const result = await executeTransfer(
-        pendingPayment.message,
-        pendingPayment.ctx
+      const result = await executeTransfer(confirm.message, confirm.ctx);
+      const sentTotal =
+        confirm.quote.intent.amount + (confirm.quote.mentoFeeUsd ?? 0);
+      await refreshBalancesAfterSend(sentTotal);
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId && m.role === "bot" ? { ...m, confirm: undefined } : m
+        )
       );
-      setModalPhase("success");
-      await refreshBalances();
+
       const claimNote =
         result.deliveryMethod === "escrow" && result.claimUrl
           ? `\n${t("pay.claimLink")}${result.notificationSent ? ` ${t("pay.claimSent")}` : ""}: ${result.claimUrl}`
@@ -287,34 +242,32 @@ export function PayChat() {
 
       appendBot({
         text:
-          `${t("pay.done")} ${result.summary}. ${result.savings}` +
-          (result.txHash ? `\nReceipt: ${result.receiptId}` : "") +
-          claimNote,
+          formatSuccessText(
+            confirm.quote.intent.amount,
+            confirm.quote.intent.sourceCurrency,
+            recipientName,
+            result.recipientReceives,
+            result.destinationCurrency,
+            result.savings,
+            t
+          ) + claimNote,
         txHash: result.txHash,
         receipt: {
           receiptId: result.receiptId,
-          amount: pendingPayment.quote.intent.amount,
-          sourceCurrency: pendingPayment.quote.intent.sourceCurrency,
+          amount: confirm.quote.intent.amount,
+          sourceCurrency: confirm.quote.intent.sourceCurrency,
           destinationCurrency: result.destinationCurrency,
           recipientReceives: result.recipientReceives,
-          recipientName: pendingPayment.recipientName,
+          recipientName,
           savings: result.savings,
         },
       });
     } catch (err) {
       const reason = err instanceof Error ? err.message : "Transfer failed";
-      setModalOpen(false);
       appendBot({ text: `${t("pay.transferFailed")} ${reason}` });
     } finally {
-      setSubmitting(false);
+      setConfirmingId(null);
     }
-  };
-
-  const handleClosePaymentModal = () => {
-    if (submitting) return;
-    setModalOpen(false);
-    setModalPhase("confirm");
-    setPendingPayment(null);
   };
 
   const toggleVoice = () => {
@@ -344,8 +297,18 @@ export function PayChat() {
     return () => stopSpeechRef.current?.();
   }, []);
 
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: reduced ? "auto" : "smooth",
+    });
+  }, [messages, thinking]);
+
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex shrink-0 items-center px-5 pb-3 pt-5">
         <Link href="/home" className="icon-btn" aria-label={t("common.back")}>
           <ChevronLeftIcon className="h-5 w-5" />
@@ -358,7 +321,10 @@ export function PayChat() {
 
       <AgentStatusBanner />
 
-      <div className="screen screen-has-composer gap-4 px-5">
+      <div
+        ref={scrollRef}
+        className="screen screen-has-composer gap-4 px-5 pt-1"
+      >
         {messages.map((msg) =>
           msg.role === "bot" ? (
             <div key={msg.id} className="flex flex-col gap-1.5">
@@ -386,14 +352,45 @@ export function PayChat() {
                 />
               )}
               {msg.confirm && (
-                <button
-                  type="button"
-                  className="btn btn-dark mt-1 self-start"
-                  onClick={() => openPaymentModal(msg.confirm!)}
-                >
-                  <BoltIcon className="h-4 w-4 text-accent-400" />
-                  {msg.confirm.label}
-                </button>
+                <div className="pay-confirm-card mt-1 max-w-[min(100%,20rem)] self-start">
+                  <div className="confirm-modal-details">
+                    {formatConfirmDetails(
+                      msg.confirm.quote,
+                      msg.confirm.quote.intent.recipientName ?? "Recipient",
+                      t
+                    ).map(
+                      (row) => (
+                        <div key={row.label} className="confirm-modal-detail-row">
+                          <span className="text-muted">{row.label}</span>
+                          <span className="tnum font-semibold text-ink">
+                            {row.value}
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-dark"
+                      disabled={Boolean(confirmingId)}
+                      onClick={() => void handleInlineConfirm(msg.id, msg.confirm!)}
+                    >
+                      <BoltIcon className="h-4 w-4 text-accent-400" />
+                      {confirmingId === msg.id
+                        ? t("pay.sending")
+                        : msg.confirm.label}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-light"
+                      disabled={Boolean(confirmingId)}
+                      onClick={() => dismissConfirm(msg.id)}
+                    >
+                      {t("pay.cancel")}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
           ) : (
@@ -467,22 +464,6 @@ export function PayChat() {
         quote={alertQuote}
       />
 
-      <ConfirmationModal
-        open={modalOpen}
-        variant="sent"
-        phase={modalPhase}
-        recipientName={pendingPayment?.recipientName}
-        message={
-          modalPhase === "success"
-            ? t("pay.confirmSuccess")
-            : pendingPayment?.quote.savings
-        }
-        details={pendingPayment?.details}
-        busy={submitting}
-        busyLabel={t("pay.sending")}
-        onConfirm={handleConfirmPayment}
-        onClose={handleClosePaymentModal}
-      />
-    </>
+    </div>
   );
 }
