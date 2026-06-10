@@ -46,11 +46,9 @@ const ConfigSchema = z
   agentId: z.coerce.number().int().nonnegative().optional(),
   agentUri: z.string().optional(),
   agentName: z.string().default("Remifi"),
-  agentDescription: z
-    .string()
-    .default(
-      "Multilingual AI remittance agent on Celo (English, Spanish, Portuguese, French). Auto-detects language, parses send intent, quotes Mento routes, compares fees vs Western Union/Wise, executes on-chain stablecoin transfers. Telegram @remifi_bot, web, HTTP API, x402."
-    ),
+  agentDescription: z.string().default(
+    "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds. remifi.xyz · api.remifi.xyz · Telegram @remifi_bot"
+  ),
   agentImage: z.string().optional(),
   publicBaseUrl: z.string().url().optional(),
   publicAgentApiUrl: z.string().url().optional(),

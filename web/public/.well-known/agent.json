@@ -1,9 +1,9 @@
 {
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "Remifi",
-  "description": "Remifi is a multilingual AI remittance agent on Celo — speak English, Spanish, Portuguese, or French with no language picker. Examples: \"Send $50 to Mom in the Philippines\", \"Enviar 50 dólares a mi mamá en Filipinas\", \"Transferir 100 euros para meu irmão na Nigéria\", \"Envoyer 50 euros à mon frère au Nigeria\". Remifi auto-detects locale, parses intent, quotes live Mento stablecoin routes, compares fees vs Western Union and Wise, and executes on-chain stablecoin transfers in seconds. Telegram @remifi_bot, web, HTTP API, x402.",
+  "description": "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds. remifi.xyz · api.remifi.xyz · Telegram @remifi_bot",
   "tags": ["multilingual", "remittance", "celo", "mento", "stablecoin", "telegram", "x402", "english", "spanish", "portuguese", "french"],
-  "image": "https://blob.8004scan.app/116efe70325791b5673bf2ecb1a3608a7af3991bc81cbdca6460d4a7f9042915.jpg",
+  "image": "https://remifi.xyz/assets/remifi-agent.png",
   "endpoints": [
     {
       "type": "a2a",
@@ -16,6 +16,11 @@
     {
       "type": "x402",
       "url": "https://api.remifi.xyz/api/x402/premium-quote"
+    },
+    {
+      "type": "wallet",
+      "address": "0xB98cFAC37b8bD7f549789718aC17F8aEE7cE0c37",
+      "chainId": 42220
     }
   ],
   "services": [
@@ -36,6 +41,7 @@
     {
       "name": "MCP",
       "endpoint": "https://api.remifi.xyz",
+      "version": "1.0.0",
       "mcpTools": [
         "natural_language_parsing",
         "mento_quote",
@@ -77,17 +83,6 @@
         "agent_info",
         "premium_quote"
       ]
-    },
-    {
-      "name": "OASF",
-      "endpoint": "https://github.com/agntcy/oasf/",
-      "skills": [
-        "advanced_reasoning_planning/strategic_planning",
-        "agent_orchestration/agent_coordination",
-        "agent_orchestration/multi_agent_planning",
-        "advanced_reasoning_planning/chain_of_thought_structuring"
-      ],
-      "domains": []
     }
   ],
   "x402Support": true,
@@ -96,6 +91,10 @@
     {
       "agentId": 326,
       "agentRegistry": "eip155:11142220:0x8004A818BFB912233c491871b3d84c89A494BD9e"
+    },
+    {
+      "agentId": 9237,
+      "agentRegistry": "eip155:42220:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
     }
   ],
   "supportedTrust": ["reputation", "validation", "tee"],

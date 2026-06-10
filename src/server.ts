@@ -20,6 +20,12 @@ import {
 } from "./api/service.js";
 import { StoredContactSchema } from "./contacts/types.js";
 import { buildAgentCard } from "./agent/agent-card.js";
+import {
+  buildApiIndex,
+  buildMcpManifest,
+  REMIFI_MCP_TOOLS,
+} from "./agent/mcp-manifest.js";
+import { buildAgentRegistrationFile } from "./agent/registration-file.js";
 import { agentRegistryId } from "./agent/registry-addresses.js";
 import {
   applySettleHeaders,
@@ -79,6 +85,53 @@ function transferContext(body: Record<string, unknown>) {
   return Object.keys(ctx).length ? ctx : undefined;
 }
 
+/** Public MCP JSON-RPC for 8004scan health probes (no API key). */
+async function handleMcpJsonRpc(
+  req: IncomingMessage,
+  res: ServerResponse,
+  cfg: Config
+) {
+  const body = await readBody(req);
+  const method = typeof body.method === "string" ? body.method : "";
+  const id = body.id ?? 0;
+
+  if (method === "initialize") {
+    return sendJson(res, 200, {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        protocolVersion: "2025-06-18",
+        capabilities: { tools: {}, prompts: {}, resources: {} },
+        serverInfo: { name: cfg.agentName, version: "1.0.0" },
+      },
+    });
+  }
+
+  if (method === "tools/list") {
+    return sendJson(res, 200, {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        tools: REMIFI_MCP_TOOLS.map((name) => ({
+          name,
+          description: `Remifi ${name.replace(/_/g, " ")}`,
+          inputSchema: { type: "object", properties: {} },
+        })),
+      },
+    });
+  }
+
+  if (method === "ping") {
+    return sendJson(res, 200, { jsonrpc: "2.0", id, result: {} });
+  }
+
+  return sendJson(res, 200, {
+    jsonrpc: "2.0",
+    id,
+    error: { code: -32601, message: `Method not found: ${method}` },
+  });
+}
+
 /** Optional shared-secret check (skipped if AGENT_API_KEY is unset). */
 function authorized(req: IncomingMessage, cfg: Config): boolean {
   if (!cfg.agentApiKey) return true;
@@ -97,6 +150,11 @@ const server = createServer(async (req, res) => {
   const path = url.pathname;
 
   try {
+    if (req.method === "GET" && path === "/") {
+      res.setHeader("Accept-Payment", "x402");
+      return sendJson(res, 200, buildApiIndex(config, getAgentAddress(config)));
+    }
+
     if (req.method === "GET" && path === "/api/health") {
       return sendJson(res, 200, {
         ok: true,
@@ -105,6 +163,34 @@ const server = createServer(async (req, res) => {
         vaultConfigured: Boolean(config.remifiVaultAddress),
         contactsCount: listContacts(config).length,
       });
+    }
+
+    if (req.method === "GET" && path === "/api/agent") {
+      return sendJson(res, 200, {
+        address: getAgentAddress(config),
+        chainId: config.celoChainId,
+        agentId: config.agentId ?? null,
+        agentRegistry: agentRegistryId(config),
+        registered: config.agentId != null,
+      });
+    }
+
+    if (req.method === "GET" && path === "/.well-known/mcp.json") {
+      return sendJson(res, 200, buildMcpManifest(config));
+    }
+
+    if (
+      req.method === "GET" &&
+      path === "/.well-known/agent-registration.json"
+    ) {
+      return sendJson(res, 200, buildAgentRegistrationFile(config));
+    }
+
+    if (
+      req.method === "POST" &&
+      (path === "/" || path === "/mcp" || path === "/api/mcp")
+    ) {
+      return handleMcpJsonRpc(req, res, config);
     }
 
     if (req.method === "GET" && path === "/api/claim") {
@@ -135,6 +221,7 @@ const server = createServer(async (req, res) => {
     // ── x402: payment requirements for the premium quote endpoint ──
     if (req.method === "GET" && path === "/api/x402/info") {
       const resourceUrl = `${url.origin}/api/x402/premium-quote`;
+      res.setHeader("Accept-Payment", "x402");
       return sendJson(res, 200, buildPaymentRequirements(config, resourceUrl));
     }
 
@@ -189,16 +276,6 @@ const server = createServer(async (req, res) => {
       if (!message) return sendJson(res, 400, { error: "message is required" });
       const result = await executeForMessage(config, message, transferContext(body));
       return sendJson(res, 200, result);
-    }
-
-    if (req.method === "GET" && path === "/api/agent") {
-      return sendJson(res, 200, {
-        address: getAgentAddress(config),
-        chainId: config.celoChainId,
-        agentId: config.agentId ?? null,
-        agentRegistry: agentRegistryId(config),
-        registered: config.agentId != null,
-      });
     }
 
     if (req.method === "GET" && path === "/api/profile") {
