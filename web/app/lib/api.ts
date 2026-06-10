@@ -163,8 +163,13 @@ function headers(): Record<string, string> {
 async function handle<T>(res: Response): Promise<T> {
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) {
+    const hint =
+      res.status === 401
+        ? " — check NEXT_PUBLIC_AGENT_API_KEY matches AGENT_API_KEY on the API"
+        : "";
     throw new Error(
-      (data as { error?: string }).error ?? `Request failed (${res.status})`
+      ((data as { error?: string }).error ?? `Request failed (${res.status})`) +
+        hint
     );
   }
   return data;
@@ -223,18 +228,26 @@ export async function fetchBalances(address: string): Promise<BalanceResponse> {
     `${API_BASE}/api/balance?address=${encodeURIComponent(address)}&_=${Date.now()}`,
     { headers: headers(), cache: "no-store" }
   );
-  return handle<BalanceResponse>(res);
+  const data = await handle<BalanceResponse>(res);
+  return {
+    ...data,
+    items: Array.isArray(data.items) ? data.items : [],
+  };
 }
 
 /** Transfer history from the agent store (data/transactions.json). */
 export async function fetchHistory(): Promise<HistoryResponse> {
   const res = await fetch(`${API_BASE}/api/history`, { headers: headers() });
-  return handle<HistoryResponse>(res);
+  const data = await handle<HistoryResponse>(res);
+  return { items: Array.isArray(data.items) ? data.items : [] };
 }
 
 export async function fetchSchedules(): Promise<SchedulesResponse> {
   const res = await fetch(`${API_BASE}/api/schedules`, { headers: headers() });
-  return handle<SchedulesResponse>(res);
+  const data = await handle<SchedulesResponse>(res);
+  return {
+    schedules: Array.isArray(data.schedules) ? data.schedules : [],
+  };
 }
 
 export async function cancelSchedule(id: string): Promise<{ ok: boolean }> {
@@ -266,13 +279,19 @@ export async function syncContacts(
     headers: headers(),
     body: JSON.stringify({ contacts }),
   });
-  return handle<ContactsResponse>(res);
+  const data = await handle<ContactsResponse>(res);
+  return {
+    contacts: Array.isArray(data.contacts) ? data.contacts : [],
+  };
 }
 
 /** Fetch contacts stored on the agent API. */
 export async function fetchContacts(): Promise<ContactsResponse> {
   const res = await fetch(`${API_BASE}/api/contacts`, { headers: headers() });
-  return handle<ContactsResponse>(res);
+  const data = await handle<ContactsResponse>(res);
+  return {
+    contacts: Array.isArray(data.contacts) ? data.contacts : [],
+  };
 }
 
 /** Bulk import device address-book entries into the agent contact store. */
@@ -284,7 +303,11 @@ export async function importPhoneContacts(
     headers: headers(),
     body: JSON.stringify({ contacts }),
   });
-  return handle<ContactsResponse & { imported: number }>(res);
+  const data = await handle<ContactsResponse & { imported: number }>(res);
+  return {
+    ...data,
+    contacts: Array.isArray(data.contacts) ? data.contacts : [],
+  };
 }
 
 /** Read escrow details for a claim link (public). */
