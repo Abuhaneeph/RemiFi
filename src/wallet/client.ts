@@ -49,6 +49,15 @@ export function getWalletClient(config: Config) {
   });
 }
 
+/** Native CELO balance (raw wei) — used for gas pre-checks. */
+export async function getNativeBalance(
+  config: Config,
+  owner: Address
+): Promise<bigint> {
+  const client = getPublicClient(config);
+  return client.getBalance({ address: owner });
+}
+
 /** ERC-20 balance of `owner` for `token` (raw units, 18 decimals for Celo stables). */
 export async function getTokenBalance(
   config: Config,

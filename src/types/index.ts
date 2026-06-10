@@ -36,6 +36,9 @@ export interface Corridor {
   destinationCountry: string;
   sourceToken: string;
   destinationToken: string;
+  /** ERC-20 decimals (default 18 for Mento stables, 6 for USDC). */
+  sourceDecimals?: number;
+  destinationDecimals?: number;
   mentoPair: string;
 }
 

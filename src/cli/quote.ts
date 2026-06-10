@@ -22,7 +22,7 @@ function parseArgs(): { from: string; to: string; amount: number } {
 async function main() {
   const { from, to, amount } = parseArgs();
   const config = loadConfig();
-  const corridors = loadCorridors(config.dataDir);
+  const corridors = loadCorridors(config.dataDir, config.celoChainId);
   const corridor = resolveCorridor(corridors, from, to);
 
   if (!corridor) {

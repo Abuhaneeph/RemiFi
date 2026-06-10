@@ -1,7 +1,10 @@
 import type { Address, Hex } from "viem";
 import type { Config } from "../config/index.js";
 import type { Corridor, RouteQuote } from "../types/index.js";
-import { createMentoClient } from "../mento/client.js";
+import {
+  corridorSourceDecimals,
+  createMentoClient,
+} from "../mento/client.js";
 import {
   getAgentAccount,
   getPublicClient,
@@ -54,8 +57,13 @@ export async function executeRemittance(
   // Ensure the agent wallet holds enough of the source token to send.
   const balance = await getTokenBalance(config, sourceToken, account.address);
   if (balance < amountIn) {
+    const { formatUnits } = await import("viem");
+    const decimals = corridorSourceDecimals(corridor);
+    const tokenLabel = corridor.mentoPair.includes("USDC")
+      ? "USDC"
+      : corridor.sourceCurrency;
     throw new Error(
-      `Insufficient agent balance for ${corridor.sourceCurrency}: have ${balance}, need ${amountIn}.`
+      `Insufficient agent balance for ${tokenLabel}: have ${formatUnits(balance, decimals)}, need ${formatUnits(amountIn, decimals)}.`
     );
   }
 

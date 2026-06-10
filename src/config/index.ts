@@ -49,7 +49,7 @@ const ConfigSchema = z
   agentDescription: z
     .string()
     .default(
-      "AI remittance agent: send stablecoins across borders from a natural-language message, routed via Mento on Celo."
+      "Multilingual AI remittance agent on Celo (English, Spanish, Portuguese, French). Auto-detects language, parses send intent, quotes Mento routes, compares fees vs Western Union/Wise, executes on-chain stablecoin transfers. Telegram @remifi_bot, web, HTTP API, x402."
     ),
   agentImage: z.string().optional(),
   publicBaseUrl: z.string().url().optional(),
@@ -97,7 +97,8 @@ export function loadConfig(): Config {
     slippageBps: process.env.SLIPPAGE_BPS,
     dataDir: process.env.DATA_DIR,
     logLevel: process.env.LOG_LEVEL,
-    agentApiPort: process.env.AGENT_API_PORT,
+    // Render and other PaaS set PORT; AGENT_API_PORT is the local/dev override.
+    agentApiPort: process.env.PORT ?? process.env.AGENT_API_PORT,
     agentApiKey: process.env.AGENT_API_KEY,
     webOrigin: process.env.WEB_ORIGIN,
     demoRecipientAddress: process.env.DEMO_RECIPIENT_ADDRESS,
@@ -105,7 +106,7 @@ export function loadConfig(): Config {
 
     identityRegistryAddress: process.env.IDENTITY_REGISTRY_ADDRESS,
     reputationRegistryAddress: process.env.REPUTATION_REGISTRY_ADDRESS,
-    agentId: process.env.AGENT_ID,
+    agentId: process.env.AGENT_ID?.trim() ? process.env.AGENT_ID : undefined,
     agentUri: process.env.AGENT_URI,
     agentName: process.env.AGENT_NAME,
     agentDescription: process.env.AGENT_DESCRIPTION,

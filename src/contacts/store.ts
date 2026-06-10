@@ -101,6 +101,14 @@ export function deleteContact(dataDir: string, id: string): boolean {
 }
 
 /** Case-insensitive name match; prefers exact, then starts-with, then contains. */
+export function findContactById(
+  dataDir: string,
+  id: string
+): StoredContact | undefined {
+  const lower = id.toLowerCase();
+  return loadContacts(dataDir).find((c) => c.id.toLowerCase() === lower);
+}
+
 export function findContactByName(
   dataDir: string,
   name: string

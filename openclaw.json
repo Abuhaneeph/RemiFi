@@ -2,15 +2,19 @@
   "models": {
     "mode": "merge",
     "providers": {
-      "openrouter": {
-        "apiKey": "${OPENROUTER_API_KEY}"
+      "anthropic": {
+        "apiKey": "${ANTHROPIC_API_KEY}",
+        "models": [
+          { "id": "claude-sonnet-4-6", "name": "Claude Sonnet 4.6" },
+          { "id": "claude-opus-4-8", "name": "Claude Opus 4.8" }
+        ]
       }
     }
   },
   "agents": {
     "defaults": {
       "skills": ["remifi"],
-      "model": "openrouter/anthropic/claude-sonnet-4"
+      "model": "anthropic/claude-sonnet-4-6"
     },
     "list": [
       {
@@ -30,7 +34,7 @@
           "CELO_CHAIN_ID": "${CELO_CHAIN_ID}",
           "AGENT_PRIVATE_KEY": "${AGENT_PRIVATE_KEY}",
           "DATA_DIR": "${DATA_DIR}",
-          "AGENT_API_PORT": "8787",
+          "AGENT_API_PORT": "${AGENT_API_PORT}",
           "AGENT_ID": "${AGENT_ID}",
           "DEMO_RECIPIENT_ADDRESS": "${DEMO_RECIPIENT_ADDRESS}",
           "REMIFI_VAULT_ADDRESS": "${REMIFI_VAULT_ADDRESS}",
@@ -39,7 +43,8 @@
           "TWILIO_AUTH_TOKEN": "${TWILIO_AUTH_TOKEN}",
           "TWILIO_WHATSAPP_FROM": "${TWILIO_WHATSAPP_FROM}",
           "TWILIO_SMS_FROM": "${TWILIO_SMS_FROM}",
-          "AGENT_API_KEY": "${AGENT_API_KEY}"
+          "AGENT_API_KEY": "${AGENT_API_KEY}",
+          "REQUIRE_CONFIRMATION_ABOVE_USD": "${REQUIRE_CONFIRMATION_ABOVE_USD}"
         }
       }
     },
@@ -49,6 +54,17 @@
     }
   },
   "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "dmPolicy": "open",
+      "allowFrom": ["*"],
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      }
+    },
     "whatsapp": {
       "enabled": true,
       "dmPolicy": "open",

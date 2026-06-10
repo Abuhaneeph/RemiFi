@@ -12,7 +12,7 @@
     "register": "tsx src/cli/register.ts",
     "serve": "tsx src/server.ts",
     "serve:watch": "tsx watch src/server.ts",
-    "start": "node dist/index.js",
+    "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src --ext .ts",

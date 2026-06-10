@@ -20,7 +20,7 @@ export function HomeScreenContent() {
       <Suspense fallback={null}>
         <AddContactAutoOpen />
       </Suspense>
-      <div className="screen screen-has-nav px-5 pt-5">
+      <div className="screen screen-has-nav min-h-0 flex-1 px-5 pt-5">
         <AppHeader />
         <BalanceSection />
         <ActionButtons />

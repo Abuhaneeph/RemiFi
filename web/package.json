@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "dev:clean": "node -e \"require('fs').rmSync('.next',{recursive:true,force:true})\" && next dev --turbopack",
     "dev:webpack": "next dev --webpack",
-    "build": "next build",
+    "icons": "node scripts/generate-favicons.mjs",
+    "build": "npm run icons && next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -26,6 +27,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.3.0",
     "typescript": "^5"
   },

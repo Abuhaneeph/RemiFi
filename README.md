@@ -140,6 +140,21 @@ Point OpenClaw at this repo workspace and load the **remifi** skill (`openclaw.j
 npm test
 ```
 
+### 6. Deploy (Render + Hostinger VPS)
+
+| Component | Where |
+|-----------|--------|
+| HTTP API (`npm run serve`) | **Render** — Docker (`Dockerfile`, `render.yaml`) |
+| OpenClaw / Telegram bot | **Hostinger VPS** — `openclaw gateway run` 24/7 |
+
+```bash
+# Local prod-like API
+docker compose up --build
+
+# Full guide
+# see deploy/DEPLOY.md
+```
+
 ---
 
 ## Agent API
@@ -184,7 +199,7 @@ Each locale understands local country names (e.g. *Filipinas*, *Nigéria*, *Bré
 | **Mento SDK** | Quotes & swaps on Celo | `CELO_RPC_URL` — **no Mento API key** |
 | **Celo stablecoins** | USDm, EURm, PHPm, NGNm, … | `data/corridors.json` |
 | **viem** | Sign & broadcast txs | `AGENT_PRIVATE_KEY` (demo operator wallet) |
-| **OpenClaw** | Telegram, WhatsApp, memory | `OPENROUTER_API_KEY`, `openclaw.json` |
+| **OpenClaw** | Telegram, WhatsApp, memory | `ANTHROPIC_API_KEY`, `openclaw.json` |
 | **Thirdweb** | Web auth + embedded wallets | `NEXT_PUBLIC_THIRDWEB_CLIENT_ID` in `web/.env.local` |
 | **Twilio** | SMS / WhatsApp receipts | `TWILIO_*` |
 | **ERC-8004** | Onchain agent identity | `npm run register` → `AGENT_ID` |

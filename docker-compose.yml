@@ -1,0 +1,32 @@
+# Local production-like run of the HTTP API (same image Render uses).
+# OpenClaw agent is NOT included — run that on your Hostinger VPS.
+
+services:
+  api:
+    build: .
+    ports:
+      - "8787:8787"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      DATA_DIR: /data
+      AGENT_API_PORT: "8787"
+    volumes:
+      - remifi-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  remifi-data:

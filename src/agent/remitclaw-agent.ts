@@ -3,6 +3,7 @@ import type { Config } from "../config/index.js";
 import type { Corridor, RemittanceIntent, RouteQuote, TransferRecord } from "../types/index.js";
 import { parseRemittanceIntent } from "../intent/parser.js";
 import { compareFees, formatSavings } from "../fees/comparison.js";
+import { corridorDestinationDecimals } from "../mento/client.js";
 import { prepareTransfer } from "../transfers/executor.js";
 import { scheduleRecurringTransfer } from "../transfers/scheduler.js";
 import { saveTransaction } from "../history/store.js";
@@ -56,7 +57,11 @@ export class RemitClawAgent {
     );
 
     const corridorKey = `${corridor.sourceCurrency}-${corridor.destinationCountry.slice(0, 2)}`;
-    const recipientReceives = Number(formatUnits(quote.amountOut, 18));
+    const destDecimals = corridorDestinationDecimals(corridor);
+    const recipientReceives = Number(formatUnits(quote.amountOut, destDecimals));
+    const destLabel = corridor.mentoPair.includes("USDC")
+      ? "USDC"
+      : corridor.destinationCurrency;
     const comparisons = compareFees(
       corridorKey,
       intent.amount,
@@ -73,7 +78,7 @@ export class RemitClawAgent {
     const summary = [
       `Route: ${corridor.mentoPair} (${quote.routeHops} hop${quote.routeHops === 1 ? "" : "s"})`,
       `Send: ${intent.amount} ${intent.sourceCurrency}`,
-      `Recipient receives: ~${recipientReceives.toFixed(2)} ${corridor.destinationCurrency}`,
+      `Recipient receives: ~${recipientReceives.toFixed(2)} ${destLabel}`,
       `Mento fee: ~$${quote.mentoFeeUsd.toFixed(2)} | Gas: ~$${quote.estimatedGasUsd.toFixed(4)}`,
       phoneOnly
         ? "Delivery: claim link via SMS/WhatsApp"

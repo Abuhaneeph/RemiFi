@@ -15,7 +15,6 @@ import {
   type BalanceItem,
 } from "../lib/api";
 import { deferNonCritical } from "../lib/defer";
-import { useWallet } from "./WalletContext";
 
 type AgentApiContextValue = {
   balances: BalanceItem[];
@@ -23,32 +22,45 @@ type AgentApiContextValue = {
   balancesLoading: boolean;
   balancesError: string | null;
   refreshBalances: () => Promise<void>;
+  /** Optimistic deduct + poll until on-chain balance reflects the send. */
+  refreshBalancesAfterSend: (sentAmountUsd: number) => Promise<void>;
 };
 
 const AgentApiContext = createContext<AgentApiContextValue | null>(null);
 
+function deductUsd(items: BalanceItem[], amountUsd: number): BalanceItem[] {
+  if (amountUsd <= 0) return items;
+  return items.map((item) => {
+    if (item.symbol !== "USDC" && item.symbol !== "USDm") return item;
+    return { ...item, balance: Math.max(0, item.balance - amountUsd) };
+  });
+}
+
 export function AgentApiProvider({ children }: { children: ReactNode }) {
-  const { address: connectedAddress } = useWallet();
   const [balances, setBalances] = useState<BalanceItem[]>([]);
   const [balanceAddress, setBalanceAddress] = useState<string | null>(null);
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [balancesError, setBalancesError] = useState<string | null>(null);
 
+  const syncBalances = useCallback(async () => {
+    const agentInfo = await fetchAgentInfo();
+    const address = agentInfo.address ?? null;
+    if (!address) {
+      setBalances([]);
+      setBalanceAddress(null);
+      setBalancesError("Agent wallet not configured.");
+      return;
+    }
+    const { items } = await fetchBalances(address);
+    setBalances(items);
+    setBalanceAddress(address);
+    setBalancesError(null);
+  }, []);
+
   const refreshBalances = useCallback(async () => {
     setBalancesLoading(true);
     try {
-      const address =
-        connectedAddress ?? (await fetchAgentInfo()).address ?? null;
-      if (!address) {
-        setBalances([]);
-        setBalanceAddress(null);
-        setBalancesError("No wallet connected and agent wallet not configured.");
-        return;
-      }
-      const { items } = await fetchBalances(address);
-      setBalances(items);
-      setBalanceAddress(address);
-      setBalancesError(null);
+      await syncBalances();
     } catch (err) {
       setBalances([]);
       setBalanceAddress(null);
@@ -58,7 +70,23 @@ export function AgentApiProvider({ children }: { children: ReactNode }) {
     } finally {
       setBalancesLoading(false);
     }
-  }, [connectedAddress]);
+  }, [syncBalances]);
+
+  const refreshBalancesAfterSend = useCallback(
+    async (sentAmountUsd: number) => {
+      setBalances((prev) => deductUsd(prev, sentAmountUsd));
+      const delays = [0, 2000, 4000, 6000];
+      for (const ms of delays) {
+        if (ms) await new Promise((r) => setTimeout(r, ms));
+        try {
+          await syncBalances();
+        } catch {
+          /* keep optimistic value until a poll succeeds */
+        }
+      }
+    },
+    [syncBalances]
+  );
 
   useEffect(() => {
     return deferNonCritical(() => void refreshBalances());
@@ -71,8 +99,16 @@ export function AgentApiProvider({ children }: { children: ReactNode }) {
       balancesLoading,
       balancesError,
       refreshBalances,
+      refreshBalancesAfterSend,
     }),
-    [balances, balanceAddress, balancesLoading, balancesError, refreshBalances]
+    [
+      balances,
+      balanceAddress,
+      balancesLoading,
+      balancesError,
+      refreshBalances,
+      refreshBalancesAfterSend,
+    ]
   );
 
   return (

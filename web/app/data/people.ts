@@ -20,8 +20,8 @@ export const PROFILE = {
 };
 
 export const ASSISTANT = {
-  name: "RemitClaw",
-  avatar: toyAvatar("remitclaw"),
+  name: "Remifi",
+  avatar: toyAvatar("remifi"),
 };
 
 export const WALLET_ASSETS = [

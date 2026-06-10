@@ -309,9 +309,9 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(config.agentApiPort, () => {
+server.listen(config.agentApiPort, "0.0.0.0", () => {
   console.log(
-    `Remifi agent API listening on http://localhost:${config.agentApiPort} (chainId ${config.celoChainId})`
+    `Remifi agent API listening on 0.0.0.0:${config.agentApiPort} (chainId ${config.celoChainId})`
   );
   if (!config.agentPrivateKey) {
     console.log(
