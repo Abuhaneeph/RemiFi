@@ -132,7 +132,7 @@ openclaw onboard
 openclaw gateway run
 ```
 
-Point OpenClaw at this repo workspace and load the **remifi** skill (`openclaw.json`). The skill calls `npm run remifi` for live Mento quotes and sends — never invent rates in chat.
+Point OpenClaw at this repo workspace and load the **remifi** skill (`openclaw.json`). Production VPS calls `npm run remifi-api` → `api.remifi.xyz`; local dev may use `npm run remifi` — never invent rates in chat.
 
 ### 5. Tests
 
@@ -151,8 +151,8 @@ npm test
 # Local prod-like API
 docker compose up --build
 
-# Full guide
-# see deploy/DEPLOY.md
+# Full guide: deploy/DEPLOY.md
+# VPS env template: .env.vps.example
 ```
 
 ---

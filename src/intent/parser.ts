@@ -2,13 +2,25 @@ import type { RemittanceIntent, SupportedLocale } from "../types/index.js";
 import { RemittanceIntentSchema } from "../types/index.js";
 import { detectLocale, localePatterns } from "./locales/index.js";
 
+function parseBareAmount(message: string): number | null {
+  // "Send 50 to Mom", "transfer 25 to wallet 0x…"
+  const match = message.match(
+    /\b(?:send|transfer|pay|enviar|transferir|envoyer|pagar)\s+([\d,]+(?:\.\d{1,2})?)\s+(?:to|para|à|pour)\b/i
+  );
+  if (!match) return null;
+  const value = parseFloat(match[1].replace(/,/g, ""));
+  return Number.isFinite(value) ? value : null;
+}
+
 function parseAmount(message: string, locale: SupportedLocale): number | null {
   const { amountPattern } = localePatterns[locale];
   const match = message.match(amountPattern);
-  if (!match) return null;
-  const raw = (match[1] ?? match[2] ?? "").replace(/,/g, "");
-  const value = parseFloat(raw);
-  return Number.isFinite(value) ? value : null;
+  if (match) {
+    const raw = (match[1] ?? match[2] ?? "").replace(/,/g, "");
+    const value = parseFloat(raw);
+    if (Number.isFinite(value)) return value;
+  }
+  return parseBareAmount(message);
 }
 
 function parseSourceCurrency(message: string): string {

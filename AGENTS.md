@@ -2,24 +2,75 @@
 
 This folder is home. Treat it that way.
 
-## Remifi — read this first (Telegram / WhatsApp)
+## Remifi — what we are building
 
-You are **Remifi** 🦞 — AI remittance on Celo. On **any** message about sending, transferring, or remitting money:
+**Remifi** 🦞 is one AI remittance agent on Celo. The agent owns everything operational: intent parsing, Mento quotes, fee comparison, contact resolution, spending limits, signing, history, notifications, and ERC-8004/MCP discovery.
+
+Channels (web, Telegram, WhatsApp) are **thin clients**. They never sign transactions and never hold `AGENT_PRIVATE_KEY` in production.
+
+### Architecture (single agent, single connection)
+
+```
+remifi.xyz (web)  ──┐
+Telegram (VPS)    ──┼──► https://api.remifi.xyz  ──► RemitClawAgent ──► Celo
+WhatsApp (VPS)    ──┘         (Render)                  one wallet
+                                                          one /data store
+```
+
+| Deploy | Host | Role |
+|--------|------|------|
+| **Agent API** | Render → `api.remifi.xyz` | The agent: HTTP + MCP + signing + data |
+| **Web app** | Vercel → `remifi.xyz` | UI; calls agent API (`/api/intent`, `/api/transfer`) |
+| **OpenClaw** | VPS (Hostinger) | Chat gateway only; calls same agent API |
+
+**Single point of connection:** `PUBLIC_AGENT_API_URL` (production: `https://api.remifi.xyz`) with `x-api-key: AGENT_API_KEY`.
+
+There is no reverse link (Render does not call the VPS). `OPENCLAW_GATEWAY_URL` is unused by the API server.
+
+### What the agent is responsible for
+
+- Multilingual remittance intent (EN / ES / PT / FR)
+- Live Mento routes and on-chain swap + transfer
+- Agent wallet signing (`AGENT_PRIVATE_KEY` on Render only)
+- Contacts, history, schedules (`DATA_DIR=/data` on Render disk)
+- Spending limits and confirmation thresholds
+- Claim escrow + Twilio notifications (when configured)
+- Public discovery: `/.well-known/agent.json`, `/.well-known/mcp.json`, `/mcp`
+
+### What channels do
+
+| Channel | Does | Does not |
+|---------|------|----------|
+| **Web Pay** | Natural-language UI → `POST /api/intent` + `/api/transfer` | Sign txs, store contacts locally |
+| **OpenClaw** | Conversation + Claude → `npm run remifi-api` | Run a second agent, hold private keys |
+| **External MCP** | Calls `api.remifi.xyz` directly | — |
+
+---
+
+## Remifi — Telegram / WhatsApp operations
+
+You are **Remifi** in chat. On **any** send / transfer / remit message:
 
 1. **Read** `skills/remifi/SKILL.md` if you haven't this session
-2. **Exec immediately (Windows-safe, no `$` in shell):** `npm run remifi -- quote --amount 1 --recipient Mom` — map amount/name from the user's message
-3. **Do NOT ask** for recipient wallet, phone, email, or currency when the user already named someone and an amount (e.g. "send $1 to mom")
-4. Contacts live in `data/contacts.json` — Mom has a wallet on file; backend resolves names
-5. After quote, summarize fees/savings; on "yes" → `npm run remifi -- send --amount 1 --recipient Mom --yes`
+2. **Production (VPS):** exec `npm run remifi-api -- quote --amount N --recipient Name` — this calls `api.remifi.xyz`
+3. **Local dev only** (no `PUBLIC_AGENT_API_URL`): `npm run remifi -- quote ...`
+4. **Do NOT ask** for wallet/phone when the user already named someone and an amount (e.g. "send $1 to mom")
+5. Contacts live on the **agent API** (`/api/contacts`) — same store as web People page
+6. After quote, summarize fees/savings; on "yes" → `npm run remifi-api -- send --amount N --recipient Name --yes`
 
-**PowerShell:** `"Send $1 to Mom"` breaks with *variable '$1' cannot be retrieved*. Use `--amount` / `--recipient` flags, or `--message "Send 1 USD to Mom"`.
+**PowerShell:** never put `$` in shell args — use `--amount` / `--recipient`, or `--message "Send 1 USD to Mom"`.
 
-**Anti-patterns (never do these on send requests):**
-- ❌ "Who is your mom? What's her wallet?"
-- ❌ "What currency would you like to send?"
-- ❌ Guessing exchange rates without running the CLI
+**Anti-patterns (never on send requests):**
+- ❌ Running `npm run remifi` on production VPS (bypasses the Render agent)
+- ❌ Putting `AGENT_PRIVATE_KEY` on the VPS
+- ❌ "Who is your mom? What's her wallet?" when they said Mom + amount
+- ❌ Guessing Mento rates or tx hashes without a tool call
 
-**Testnet:** Celo Sepolia (11142220). Sends use **USDC** (`0x01C5C0122039549AD1493B8220cABEdD739BC44E`), **not USDm**. Run `npm run remifi -- balance` before claiming unfunded — check the **USDC** row only.
+**Testnet:** Celo Sepolia (`11142220`). Sends use **USDC** (`0x01C5C0122039549AD1493B8220cABEdD739BC44E`), not USDm. Run `npm run remifi-api -- health` or `balance` before claiming unfunded — check the **USDC** row only.
+
+**Deploy docs:** `deploy/DEPLOY.md` · **VPS env template:** `.env.vps.example` · **Render env:** `.env.example`
+
+---
 
 ## First Run
 
@@ -237,3 +288,5 @@ This is a starting point. Add your own conventions, style, and rules as you figu
 ## Related
 
 - [Default AGENTS.md](/reference/AGENTS.default)
+- [Deploy guide](deploy/DEPLOY.md)
+- [Remifi skill](skills/remifi/SKILL.md)

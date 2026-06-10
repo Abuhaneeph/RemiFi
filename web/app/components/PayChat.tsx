@@ -17,10 +17,10 @@ import { useContacts } from "../context/ContactsContext";
 import { useLanguage } from "../context/LanguageContext";
 import {
   contactTransferContext,
-  enrichMessageWithContact,
   extractRecipientName,
   matchContact,
 } from "../lib/contacts";
+import { normalizePayMessage, payErrorHint } from "../lib/pay-message";
 import {
   executeTransfer,
   fetchQuote,
@@ -131,7 +131,7 @@ export function PayChat() {
         ...contactTransferContext(activeContact),
         ...extraCtx,
       };
-      const apiMessage = enrichMessageWithContact(trimmed, activeContact);
+      const apiMessage = normalizePayMessage(trimmed, activeContact);
 
       const quote = await fetchQuote(apiMessage, ctx);
 
@@ -182,7 +182,7 @@ export function PayChat() {
     } catch (err) {
       const reason = err instanceof Error ? err.message : "Something went wrong";
       appendBot({
-        text: `${t("pay.errorPrefix")} ${reason}. ${t("pay.errorSuffix")}`,
+        text: `${t("pay.errorPrefix")} ${reason}. ${payErrorHint(reason)}`,
       });
     } finally {
       setThinking(false);

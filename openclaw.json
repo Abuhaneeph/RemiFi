@@ -30,19 +30,7 @@
       "remifi": {
         "enabled": true,
         "env": {
-          "CELO_RPC_URL": "${CELO_RPC_URL}",
-          "CELO_CHAIN_ID": "${CELO_CHAIN_ID}",
-          "AGENT_PRIVATE_KEY": "${AGENT_PRIVATE_KEY}",
-          "DATA_DIR": "${DATA_DIR}",
-          "AGENT_API_PORT": "${AGENT_API_PORT}",
-          "AGENT_ID": "${AGENT_ID}",
-          "DEMO_RECIPIENT_ADDRESS": "${DEMO_RECIPIENT_ADDRESS}",
-          "REMIFI_VAULT_ADDRESS": "${REMIFI_VAULT_ADDRESS}",
-          "PUBLIC_BASE_URL": "${PUBLIC_BASE_URL}",
-          "TWILIO_ACCOUNT_SID": "${TWILIO_ACCOUNT_SID}",
-          "TWILIO_AUTH_TOKEN": "${TWILIO_AUTH_TOKEN}",
-          "TWILIO_WHATSAPP_FROM": "${TWILIO_WHATSAPP_FROM}",
-          "TWILIO_SMS_FROM": "${TWILIO_SMS_FROM}",
+          "PUBLIC_AGENT_API_URL": "${PUBLIC_AGENT_API_URL}",
           "AGENT_API_KEY": "${AGENT_API_KEY}",
           "REQUIRE_CONFIRMATION_ABOVE_USD": "${REQUIRE_CONFIRMATION_ABOVE_USD}"
         }
