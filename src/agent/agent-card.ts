@@ -1,5 +1,13 @@
 import type { Config } from "../config/index.js";
+import {
+  REMIFI_MCP_PROMPTS,
+  REMIFI_MCP_RESOURCES,
+  REMIFI_MCP_TOOLS,
+} from "./mcp-manifest.js";
 import { agentRegistryId } from "./registry-addresses.js";
+
+export const REMIFI_AGENT_DESCRIPTION =
+  "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds. remifi.xyz · api.remifi.xyz · Telegram @remifi_bot";
 
 /** Celo docs endpoint entry (`type` + `url`, optional wallet fields). */
 export interface AgentEndpoint {
@@ -79,6 +87,18 @@ export function buildAgentCard(
   if (web) services.push({ name: "web", endpoint: web });
   services.push({ name: "HTTP", endpoint: api, version: "1.0.0" });
   services.push({ name: "x402", endpoint: premiumQuote, version: "1.0.0" });
+  services.push({
+    name: "MCP",
+    endpoint: api,
+    version: "1.0.0",
+    mcpTools: [...REMIFI_MCP_TOOLS],
+    mcpPrompts: [...REMIFI_MCP_PROMPTS],
+    mcpResources: [...REMIFI_MCP_RESOURCES],
+  } as AgentService & {
+    mcpTools: string[];
+    mcpPrompts: string[];
+    mcpResources: string[];
+  });
 
   return {
     type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
@@ -96,7 +116,8 @@ export function buildAgentCard(
         ? [{ agentId: config.agentId, agentRegistry: agentRegistryId(config) }]
         : [],
     supportedTrust: ["reputation", "validation", "tee"],
-  };
+    supportedTrusts: ["reputation", "crypto-economic", "tee-attestation"],
+  } as AgentCard & { supportedTrusts: string[] };
 }
 
 /**
