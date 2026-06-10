@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 import { loadConfig } from "../config/index.js";
 import { getAgentAccount } from "../wallet/client.js";
-import { buildAgentCard, resolveAgentUri } from "../agent/agent-card.js";
+import {
+  buildAgentCard,
+  computeAgentMetadataHash,
+  resolveAgentUri,
+} from "../agent/agent-card.js";
 import {
   getAgentWallet,
   registerAgent,
+  setAgentHash,
   setAgentUri,
 } from "../agent/register.js";
 import type { Config } from "../config/index.js";
@@ -74,6 +79,44 @@ async function main() {
   const account = getAgentAccount(config);
   const agentUri = args.uri ?? resolveAgentUri(config);
   const card = buildAgentCard(config, account.address);
+
+  if (args.command === "set-hash" || args.command === "update-hash") {
+    if (config.agentId == null) {
+      console.error(
+        "Error: AGENT_ID is required to set agentHash. Set AGENT_ID in .env"
+      );
+      process.exit(1);
+    }
+
+    const hash = computeAgentMetadataHash(card);
+    console.log("\n--- ERC-8004 set agentHash (8004scan integrity) ---");
+    console.log(`Agent ID:  ${config.agentId}`);
+    console.log(`Hash:      ${hash}`);
+    console.log(
+      "\nEnsure hosted agent.json matches the card above before submitting."
+    );
+
+    if (args.dryRun) {
+      console.log("\n(dry run — no transaction sent)");
+      return;
+    }
+
+    console.log("\nSubmitting setMetadata(agentHash) transaction…");
+    const { txHash, hash: onChainHash } = await setAgentHash(
+      config,
+      config.agentId,
+      account.address
+    );
+    const base =
+      config.celoChainId === 11142220
+        ? "https://celo-sepolia.blockscout.com"
+        : "https://celoscan.io";
+    console.log("\n--- agentHash set ---");
+    console.log(`Hash:      ${onChainHash}`);
+    console.log(`Tx:        ${base}/tx/${txHash}`);
+    console.log(`Profile:   ${scanProfileUrl(config.celoChainId, config.agentId)}`);
+    return;
+  }
 
   if (args.command === "update-uri" || args.command === "set-uri") {
     if (config.agentId == null) {

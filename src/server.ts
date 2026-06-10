@@ -25,6 +25,7 @@ import {
   buildMcpManifest,
   buildMcpResourceDescriptor,
   mcpResourceForPath,
+  REMIFI_MCP_PROMPTS,
   REMIFI_MCP_TOOLS,
 } from "./agent/mcp-manifest.js";
 import { buildAgentRegistrationFile } from "./agent/registration-file.js";
@@ -123,6 +124,19 @@ async function handleMcpJsonRpc(
     });
   }
 
+  if (method === "prompts/list") {
+    return sendJson(res, 200, {
+      jsonrpc: "2.0",
+      id,
+      result: {
+        prompts: REMIFI_MCP_PROMPTS.map((name) => ({
+          name,
+          description: `Remifi ${name.replace(/_/g, " ")} prompt`,
+        })),
+      },
+    });
+  }
+
   if (method === "resources/list") {
     const manifest = buildMcpManifest(cfg);
     return sendJson(res, 200, {
@@ -172,12 +186,18 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && path === "/api/health") {
+      const executionReady = Boolean(config.agentPrivateKey);
       return sendJson(res, 200, {
+        status: executionReady ? "healthy" : "degraded",
         ok: true,
+        service: "remifi-api",
+        version: "1.0.0",
         chainId: config.celoChainId,
-        executionReady: Boolean(config.agentPrivateKey),
+        agentId: config.agentId ?? null,
+        executionReady,
         vaultConfigured: Boolean(config.remifiVaultAddress),
         contactsCount: listContacts(config).length,
+        timestamp: new Date().toISOString(),
       });
     }
 

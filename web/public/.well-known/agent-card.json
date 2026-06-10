@@ -3,18 +3,33 @@
   "description": "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds. remifi.xyz · api.remifi.xyz · Telegram @remifi_bot",
   "version": "1.0.0",
   "iconUrl": "https://remifi.xyz/assets/remifi-agent.png",
-  "defaultInputModes": ["text/plain", "application/json"],
-  "defaultOutputModes": ["text/plain", "application/json"],
-  "capabilities": { "streaming": false },
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "capabilities": {
+    "streaming": false
+  },
   "supportedInterfaces": [
-    { "protocolBinding": "JSONRPC", "url": "https://api.remifi.xyz" }
+    {
+      "protocolBinding": "JSONRPC",
+      "url": "https://api.remifi.xyz"
+    }
   ],
   "skills": [
     {
       "id": "send_money",
       "name": "Send remittance",
       "description": "Quote and send cross-border stablecoin remittances on Celo via Mento.",
-      "tags": ["remittance", "celo", "stablecoin"],
+      "tags": [
+        "remittance",
+        "celo",
+        "stablecoin"
+      ],
       "examples": [
         "Send $50 to my mom in the Philippines",
         "Enviar 50 dólares a mi mamá en Filipinas"
@@ -23,9 +38,120 @@
     {
       "id": "get_quote",
       "name": "Get quote",
-      "description": "Get a live Mento route quote with fee comparison.",
-      "tags": ["quote", "mento"],
-      "examples": ["Quote $100 to Nigeria", "How much to send €50 to Brazil?"]
+      "description": "Get a live Mento route quote with fee comparison vs banks.",
+      "tags": [
+        "quote",
+        "mento",
+        "fees"
+      ],
+      "examples": [
+        "Quote $100 to Nigeria",
+        "How much to send €50 to Brazil?"
+      ]
+    },
+    {
+      "id": "check_balance",
+      "name": "Check balance",
+      "description": "Look up on-chain USDC and stablecoin balances on Celo.",
+      "tags": [
+        "balance",
+        "celo"
+      ],
+      "examples": [
+        "What's my balance?",
+        "Check my USDC balance"
+      ]
+    },
+    {
+      "id": "resolve_contact",
+      "name": "Resolve contact",
+      "description": "Match a recipient name to a saved contact or wallet.",
+      "tags": [
+        "contacts",
+        "recipients"
+      ],
+      "examples": [
+        "Send to Mom",
+        "Transfer to Maria"
+      ]
+    },
+    {
+      "id": "fee_comparison",
+      "name": "Compare fees",
+      "description": "Compare Remifi fees and savings against traditional remittance.",
+      "tags": [
+        "fees",
+        "savings"
+      ],
+      "examples": [
+        "How much do I save vs Western Union?",
+        "Compare fees for $200"
+      ]
+    },
+    {
+      "id": "multilingual_intent",
+      "name": "Multilingual intent",
+      "description": "Parse remittance requests in English, Spanish, Portuguese, or French.",
+      "tags": [
+        "multilingual",
+        "nlp"
+      ],
+      "examples": [
+        "Envoyer 50 euros à mon frère",
+        "Transferir 100 reais para minha mãe"
+      ]
+    },
+    {
+      "id": "claim_escrow",
+      "name": "Claim escrow",
+      "description": "Look up and claim phone-only escrow transfers.",
+      "tags": [
+        "escrow",
+        "claim"
+      ],
+      "examples": [
+        "Claim my transfer",
+        "Check claim status"
+      ]
+    },
+    {
+      "id": "transfer_history",
+      "name": "Transfer history",
+      "description": "List past remittance transactions and statuses.",
+      "tags": [
+        "history",
+        "transactions"
+      ],
+      "examples": [
+        "Show my last transfers",
+        "Transaction history"
+      ]
+    },
+    {
+      "id": "x402_payments",
+      "name": "x402 payments",
+      "description": "Pay for premium quotes via HTTP 402 micropayments on Celo.",
+      "tags": [
+        "x402",
+        "payments"
+      ],
+      "examples": [
+        "Get premium quote",
+        "Pay for detailed route analysis"
+      ]
+    },
+    {
+      "id": "manage_contacts",
+      "name": "Manage contacts",
+      "description": "Add, sync, or import recipient contacts for remittances.",
+      "tags": [
+        "contacts",
+        "recipients"
+      ],
+      "examples": [
+        "Add Mom as a contact",
+        "Sync my phone contacts"
+      ]
     }
   ]
 }

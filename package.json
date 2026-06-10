@@ -10,6 +10,7 @@
     "remifi": "tsx src/cli/remifi.ts",
     "send": "tsx src/cli/send.ts",
     "register": "tsx src/cli/register.ts",
+    "sync-well-known": "tsx src/cli/sync-well-known.ts",
     "serve": "tsx src/server.ts",
     "serve:watch": "tsx watch src/server.ts",
     "start": "node dist/server.js",
