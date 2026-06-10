@@ -1,5 +1,6 @@
 import type { Config } from "../config/index.js";
 import {
+  MCP_PROTOCOL_VERSION,
   REMIFI_MCP_PROMPTS,
   REMIFI_MCP_RESOURCES,
   REMIFI_MCP_TOOLS,
@@ -35,6 +36,7 @@ export interface AgentCard {
   type: "Agent" | "https://eips.ethereum.org/EIPS/eip-8004#registration-v1";
   name: string;
   description: string;
+  tags?: string[];
   image?: string;
   endpoints: AgentEndpoint[];
   services: AgentService[];
@@ -42,6 +44,39 @@ export interface AgentCard {
   active: boolean;
   registrations: { agentId: number; agentRegistry: string }[];
   supportedTrust: string[];
+}
+
+export const REMIFI_AGENT_TAGS = [
+  "multilingual",
+  "remittance",
+  "celo",
+  "mento",
+  "stablecoin",
+  "telegram",
+  "x402",
+  "english",
+  "spanish",
+  "portuguese",
+  "french",
+] as const;
+
+/** A2A v0.3+ discovery card (/.well-known/agent-card.json). */
+export interface A2aAgentCard {
+  name: string;
+  description: string;
+  version: string;
+  iconUrl?: string;
+  defaultInputModes: string[];
+  defaultOutputModes: string[];
+  capabilities: { streaming: boolean };
+  supportedInterfaces: { protocolBinding: string; url: string }[];
+  skills: {
+    id: string;
+    name: string;
+    description: string;
+    tags: string[];
+    examples: string[];
+  }[];
 }
 
 export { agentRegistryId };
@@ -66,12 +101,11 @@ export function buildAgentCard(
   const web = config.publicBaseUrl?.replace(/\/$/, "");
   const premiumQuote = `${api}/api/x402/premium-quote`;
 
+  const agentCardUrl = web ? `${web}/.well-known/agent-card.json` : undefined;
+
   const endpoints: AgentEndpoint[] = [];
-  if (web) {
-    endpoints.push({
-      type: "a2a",
-      url: `${web}/.well-known/agent.json`,
-    });
+  if (agentCardUrl) {
+    endpoints.push({ type: "a2a", url: agentCardUrl });
   }
   endpoints.push({ type: "http", url: api });
   endpoints.push({ type: "x402", url: premiumQuote });
@@ -85,12 +119,15 @@ export function buildAgentCard(
 
   const services: AgentService[] = [];
   if (web) services.push({ name: "web", endpoint: web });
+  if (agentCardUrl) {
+    services.push({ name: "A2A", endpoint: agentCardUrl, version: "0.3.0" });
+  }
   services.push({ name: "HTTP", endpoint: api, version: "1.0.0" });
   services.push({ name: "x402", endpoint: premiumQuote, version: "1.0.0" });
   services.push({
     name: "MCP",
     endpoint: api,
-    version: "1.0.0",
+    version: MCP_PROTOCOL_VERSION,
     mcpTools: [...REMIFI_MCP_TOOLS],
     mcpPrompts: [...REMIFI_MCP_PROMPTS],
     mcpResources: [...REMIFI_MCP_RESOURCES],
@@ -104,6 +141,7 @@ export function buildAgentCard(
     type: "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
     name: config.agentName,
     description: config.agentDescription,
+    tags: [...REMIFI_AGENT_TAGS],
     image:
       config.agentImage ??
       "https://remifi.xyz/assets/remifi-agent.png",
@@ -115,9 +153,43 @@ export function buildAgentCard(
       config.agentId != null
         ? [{ agentId: config.agentId, agentRegistry: agentRegistryId(config) }]
         : [],
-    supportedTrust: ["reputation", "validation", "tee"],
-    supportedTrusts: ["reputation", "crypto-economic", "tee-attestation"],
-  } as AgentCard & { supportedTrusts: string[] };
+    supportedTrust: ["reputation", "crypto-economic", "tee-attestation"],
+  };
+}
+
+/** A2A v0.3+ agent card for /.well-known/agent-card.json probes. */
+export function buildA2aAgentCard(config: Config): A2aAgentCard {
+  const api = apiBaseUrl(config);
+  return {
+    name: config.agentName,
+    description: config.agentDescription,
+    version: "1.0.0",
+    iconUrl: config.agentImage ?? "https://remifi.xyz/assets/remifi-agent.png",
+    defaultInputModes: ["text/plain", "application/json"],
+    defaultOutputModes: ["text/plain", "application/json"],
+    capabilities: { streaming: false },
+    supportedInterfaces: [{ protocolBinding: "JSONRPC", url: api }],
+    skills: [
+      {
+        id: "send_money",
+        name: "Send remittance",
+        description:
+          "Quote and send cross-border stablecoin remittances on Celo via Mento.",
+        tags: ["remittance", "celo", "stablecoin"],
+        examples: [
+          "Send $50 to my mom in the Philippines",
+          "Enviar 50 dólares a mi mamá en Filipinas",
+        ],
+      },
+      {
+        id: "get_quote",
+        name: "Get quote",
+        description: "Get a live Mento route quote with fee comparison.",
+        tags: ["quote", "mento"],
+        examples: ["Quote $100 to Nigeria", "How much to send €50 to Brazil?"],
+      },
+    ],
+  };
 }
 
 /**

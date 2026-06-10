@@ -1,0 +1,31 @@
+{
+  "name": "Remifi",
+  "description": "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds. remifi.xyz · api.remifi.xyz · Telegram @remifi_bot",
+  "version": "1.0.0",
+  "iconUrl": "https://remifi.xyz/assets/remifi-agent.png",
+  "defaultInputModes": ["text/plain", "application/json"],
+  "defaultOutputModes": ["text/plain", "application/json"],
+  "capabilities": { "streaming": false },
+  "supportedInterfaces": [
+    { "protocolBinding": "JSONRPC", "url": "https://api.remifi.xyz" }
+  ],
+  "skills": [
+    {
+      "id": "send_money",
+      "name": "Send remittance",
+      "description": "Quote and send cross-border stablecoin remittances on Celo via Mento.",
+      "tags": ["remittance", "celo", "stablecoin"],
+      "examples": [
+        "Send $50 to my mom in the Philippines",
+        "Enviar 50 dólares a mi mamá en Filipinas"
+      ]
+    },
+    {
+      "id": "get_quote",
+      "name": "Get quote",
+      "description": "Get a live Mento route quote with fee comparison.",
+      "tags": ["quote", "mento"],
+      "examples": ["Quote $100 to Nigeria", "How much to send €50 to Brazil?"]
+    }
+  ]
+}
