@@ -1,157 +1,140 @@
 {
   "name": "Remifi",
   "description": "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds. remifi.xyz · api.remifi.xyz · Telegram @remifi_bot",
-  "version": "1.0.0",
-  "iconUrl": "https://remifi.xyz/assets/remifi-agent.png",
+  "url": "https://api.remifi.xyz/mcp",
+  "provider": {
+    "organization": "Remifi",
+    "url": "https://api.remifi.xyz"
+  },
+  "version": "2.0.0",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "extendedAgentCard": false
+  },
   "defaultInputModes": [
-    "text/plain",
-    "application/json"
+    "text"
   ],
   "defaultOutputModes": [
-    "text/plain",
-    "application/json"
-  ],
-  "capabilities": {
-    "streaming": false
-  },
-  "supportedInterfaces": [
-    {
-      "protocolBinding": "JSONRPC",
-      "url": "https://api.remifi.xyz"
-    }
+    "text"
   ],
   "skills": [
     {
-      "id": "send_money",
-      "name": "Send remittance",
-      "description": "Quote and send cross-border stablecoin remittances on Celo via Mento.",
+      "id": "natural_language_processing_natural_language_generation_text_generation",
+      "name": "Text Generation",
+      "description": "Multilingual remittance confirmations, quotes, and transfer receipts in EN / ES / PT / FR",
       "tags": [
-        "remittance",
-        "celo",
-        "stablecoin"
-      ],
-      "examples": [
-        "Send $50 to my mom in the Philippines",
-        "Enviar 50 dólares a mi mamá en Filipinas"
+        "natural-language-processing",
+        "natural-language-generation",
+        "text-generation"
       ]
     },
     {
-      "id": "get_quote",
-      "name": "Get quote",
-      "description": "Get a live Mento route quote with fee comparison vs banks.",
+      "id": "natural_language_processing_natural_language_understanding_contextual_comprehension",
+      "name": "Contextual Comprehension",
+      "description": "Understands recipient names, amounts, corridors, and currencies from natural language",
       "tags": [
-        "quote",
-        "mento",
-        "fees"
-      ],
-      "examples": [
-        "Quote $100 to Nigeria",
-        "How much to send €50 to Brazil?"
+        "natural-language-processing",
+        "natural-language-understanding",
+        "contextual-comprehension"
       ]
     },
     {
-      "id": "check_balance",
-      "name": "Check balance",
-      "description": "Look up on-chain USDC and stablecoin balances on Celo.",
+      "id": "natural_language_processing_conversation_chatbot",
+      "name": "Chatbot",
+      "description": "Conversational remittance flows via Telegram, WhatsApp, and web chat",
       "tags": [
-        "balance",
-        "celo"
-      ],
-      "examples": [
-        "What's my balance?",
-        "Check my USDC balance"
+        "natural-language-processing",
+        "conversation",
+        "chatbot"
       ]
     },
     {
-      "id": "resolve_contact",
-      "name": "Resolve contact",
-      "description": "Match a recipient name to a saved contact or wallet.",
+      "id": "natural_language_processing_information_retrieval_synthesis_search",
+      "name": "Search",
+      "description": "Find contacts, corridors, Mento routes, and fee comparisons across corridors",
       "tags": [
-        "contacts",
-        "recipients"
-      ],
-      "examples": [
-        "Send to Mom",
-        "Transfer to Maria"
+        "natural-language-processing",
+        "information-retrieval-synthesis",
+        "search"
       ]
     },
     {
-      "id": "fee_comparison",
-      "name": "Compare fees",
-      "description": "Compare Remifi fees and savings against traditional remittance.",
+      "id": "tool_interaction_automation_workflow_automation",
+      "name": "Workflow Automation",
+      "description": "End-to-end quote → confirm → transfer workflows with spending limits",
       "tags": [
-        "fees",
-        "savings"
-      ],
-      "examples": [
-        "How much do I save vs Western Union?",
-        "Compare fees for $200"
+        "tool-interaction",
+        "automation",
+        "workflow-automation"
       ]
     },
     {
-      "id": "multilingual_intent",
-      "name": "Multilingual intent",
-      "description": "Parse remittance requests in English, Spanish, Portuguese, or French.",
+      "id": "problem_solving",
+      "name": "Problem Solving",
+      "description": "Resolve routing, slippage, contact matching, and transfer issues",
       "tags": [
-        "multilingual",
-        "nlp"
-      ],
-      "examples": [
-        "Envoyer 50 euros à mon frère",
-        "Transferir 100 reais para minha mãe"
+        "natural-language-processing",
+        "analytical-and-logical-reasoning",
+        "problem-solving"
       ]
     },
     {
-      "id": "claim_escrow",
-      "name": "Claim escrow",
-      "description": "Look up and claim phone-only escrow transfers.",
+      "id": "question_answering",
+      "name": "Question Answering",
+      "description": "Answer questions on fees, delivery time, balances, and claim status",
       "tags": [
-        "escrow",
-        "claim"
-      ],
-      "examples": [
-        "Claim my transfer",
-        "Check claim status"
+        "natural-language-processing",
+        "information-retrieval-and-synthesis",
+        "question-answering"
       ]
     },
     {
-      "id": "transfer_history",
-      "name": "Transfer history",
-      "description": "List past remittance transactions and statuses.",
+      "id": "cryptocurrency",
+      "name": "Cryptocurrency",
+      "description": "Stablecoin remittances via USDC on Celo with Mento FX routes",
       "tags": [
-        "history",
-        "transactions"
-      ],
-      "examples": [
-        "Show my last transfers",
-        "Transaction history"
+        "technology",
+        "blockchain",
+        "cryptocurrency"
       ]
     },
     {
-      "id": "x402_payments",
-      "name": "x402 payments",
-      "description": "Pay for premium quotes via HTTP 402 micropayments on Celo.",
+      "id": "smart_contracts",
+      "name": "Smart Contracts",
+      "description": "On-chain identity (ERC-8004), Mento swaps, and escrow vault claims",
       "tags": [
-        "x402",
-        "payments"
-      ],
-      "examples": [
-        "Get premium quote",
-        "Pay for detailed route analysis"
+        "technology",
+        "blockchain",
+        "smart-contracts"
       ]
     },
     {
-      "id": "manage_contacts",
-      "name": "Manage contacts",
-      "description": "Add, sync, or import recipient contacts for remittances.",
+      "id": "digital_payments",
+      "name": "Digital Payments",
+      "description": "Cross-border digital remittance with x402 micropayments on Celo",
       "tags": [
-        "contacts",
-        "recipients"
-      ],
-      "examples": [
-        "Add Mom as a contact",
-        "Sync my phone contacts"
+        "finance-and-business",
+        "finance",
+        "digital-payments"
       ]
     }
-  ]
+  ],
+  "extensions": {
+    "x402": {
+      "spec": "https://github.com/coinbase/x402",
+      "currency": "USDC",
+      "chain": "Celo",
+      "network": "celo",
+      "priceUsd": 0.01,
+      "payTo": "0xB98cFAC37b8bD7f549789718aC17F8aEE7cE0c37",
+      "description": "Premium quotes use x402 micropayments on Celo. Discovery and health endpoints are free."
+    },
+    "mcp": {
+      "endpoint": "https://api.remifi.xyz/mcp",
+      "discovery": "https://api.remifi.xyz/.well-known/mcp.json",
+      "transport": "Streamable HTTP",
+      "description": "MCP endpoint for direct tool invocation (14 tools)"
+    }
+  }
 }

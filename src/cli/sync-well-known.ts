@@ -34,7 +34,10 @@ function main() {
     : "0xB98cFAC37b8bD7f549789718aC17F8aEE7cE0c37";
 
   writeJson(join(wellKnownDir, "agent.json"), buildAgentCard(config, wallet));
-  writeJson(join(wellKnownDir, "agent-card.json"), buildA2aAgentCard(config));
+  writeJson(
+    join(wellKnownDir, "agent-card.json"),
+    buildA2aAgentCard(config, wallet)
+  );
   writeJson(
     join(wellKnownDir, "agent-registration.json"),
     buildAgentRegistrationFile(config)
