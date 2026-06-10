@@ -8,6 +8,7 @@ import {
   setAgentUri,
 } from "../agent/register.js";
 import type { Config } from "../config/index.js";
+import { IDENTITY_REGISTRY, isCeloSepolia } from "../agent/registry-addresses.js";
 
 /** Public Remifi URLs used for ERC-8004 registration when env vars are unset. */
 const REMIFI_WEBSITE = "https://remifi.xyz";
@@ -44,10 +45,10 @@ function scanBaseUrl(chainId: number): string {
 }
 
 function scanProfileUrl(chainId: number, agentId: number): string {
-  if (chainId === CELO_SEPOLIA_CHAIN_ID) {
+  if (isCeloSepolia(chainId)) {
     return `${scanBaseUrl(chainId)}/agents/celo-sepolia/${agentId}`;
   }
-  return `${scanBaseUrl(chainId)}/agent/eip155:${chainId}:0x8004A818BFB912233c491871b3d84c89A494BD9e/${agentId}`;
+  return `${scanBaseUrl(chainId)}/agent/eip155:${chainId}:${IDENTITY_REGISTRY.mainnet}/${agentId}`;
 }
 
 /** Ensure registration uses live Remifi URLs, not localhost fallbacks. */

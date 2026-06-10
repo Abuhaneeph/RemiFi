@@ -3,7 +3,7 @@
   "name": "Remifi",
   "description": "Remifi is a multilingual AI remittance agent on Celo — speak English, Spanish, Portuguese, or French with no language picker. Examples: \"Send $50 to Mom in the Philippines\", \"Enviar 50 dólares a mi mamá en Filipinas\", \"Transferir 100 euros para meu irmão na Nigéria\", \"Envoyer 50 euros à mon frère au Nigeria\". Remifi auto-detects locale, parses intent, quotes live Mento stablecoin routes, compares fees vs Western Union and Wise, and executes on-chain stablecoin transfers in seconds. Telegram @remifi_bot, web, HTTP API, x402.",
   "tags": ["multilingual", "remittance", "celo", "mento", "stablecoin", "telegram", "x402", "english", "spanish", "portuguese", "french"],
-  "image": "https://blob.8004scan.app/116efe70325791b5673bf2ecb1a3608a7af3991bc81cbdca6460d4a7f9042915.jpg",
+  "image": "https://remifi.xyz/assets/remifi-agent.png",
   "endpoints": [
     {
       "type": "a2a",

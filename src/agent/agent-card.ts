@@ -86,7 +86,7 @@ export function buildAgentCard(
     description: config.agentDescription,
     image:
       config.agentImage ??
-      "https://blob.8004scan.app/116efe70325791b5673bf2ecb1a3608a7af3991bc81cbdca6460d4a7f9042915.jpg",
+      "https://remifi.xyz/assets/remifi-agent.png",
     endpoints,
     services,
     x402Support: true,
