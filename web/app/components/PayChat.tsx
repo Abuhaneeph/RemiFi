@@ -20,7 +20,12 @@ import {
   extractRecipientName,
   matchContact,
 } from "../lib/contacts";
-import { normalizePayMessage, payErrorHint } from "../lib/pay-message";
+import {
+  classifyPayMessage,
+  normalizePayMessage,
+  payChatReplyKey,
+  payErrorHint,
+} from "../lib/pay-message";
 import {
   executeTransfer,
   fetchQuote,
@@ -126,6 +131,12 @@ export function PayChat() {
     setThinking(true);
 
     try {
+      const chatKind = classifyPayMessage(trimmed);
+      if (chatKind !== "remittance") {
+        appendBot({ text: t(payChatReplyKey(chatKind)) });
+        return;
+      }
+
       const activeContact = contactForMessage(trimmed);
       const ctx = {
         ...contactTransferContext(activeContact),

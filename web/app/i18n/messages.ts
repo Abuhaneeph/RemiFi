@@ -45,6 +45,15 @@ export const messages = {
         "Phone on file. Set REMIFI_VAULT_ADDRESS on the agent to enable claim escrow.",
       errorPrefix: "I couldn't put together that transfer.",
       errorSuffix: "Is the agent API running? (npm run serve)",
+      chatGreeting:
+        "Hello! I'm Remifi — tell me who to pay and how much, e.g. Send $50 to Mom. I'll pull a live Mento quote from the agent, then you confirm to send on Celo.",
+      chatThanks: "You're welcome! Say Send $50 to Mom anytime you're ready.",
+      chatHelp:
+        "I'm wired to the Remifi agent on api.remifi.xyz. Say who and how much — e.g. Send $50 to Mom or Enviar 50 dólares a Mamá — and I'll quote fees before you confirm.",
+      chatNeedAmount:
+        "Who should receive it, and how much? Try: Send $50 to Mom in the Philippines.",
+      chatConfirmHint:
+        "Tap **Send** on the quote card above to confirm — that calls the agent to execute on Celo.",
       confirmSuccess: "Your transfer is confirmed on Celo via the agent API.",
       quoteLine: "Send {amount} {currency} → {name}",
       receiveLine: "{name} receives ~{amount} {currency}",
@@ -262,6 +271,15 @@ export const messages = {
         "Teléfono guardado. Configura REMIFI_VAULT_ADDRESS en el agente para escrow.",
       errorPrefix: "No pude preparar esa transferencia.",
       errorSuffix: "¿Está activa la API del agente? (npm run serve)",
+      chatGreeting:
+        "¡Hola! Soy Remifi — dime a quién y cuánto, p. ej. Enviar 50 dólares a Mamá. Obtendré una cotización Mento del agente y luego confirmas en Celo.",
+      chatThanks: "¡De nada! Di Enviar 50 dólares a Mamá cuando quieras.",
+      chatHelp:
+        "Estoy conectada al agente Remifi en api.remifi.xyz. Di quién y cuánto — p. ej. Enviar 50 dólares a Mamá — y cotizo antes de confirmar.",
+      chatNeedAmount:
+        "¿A quién y cuánto? Prueba: Enviar 50 dólares a Mamá en Filipinas.",
+      chatConfirmHint:
+        "Pulsa **Enviar** en la tarjeta de cotización para confirmar — el agente ejecuta en Celo.",
       confirmSuccess: "Tu transferencia está confirmada en Celo.",
       quoteLine: "Enviar {amount} {currency} → {name}",
       receiveLine: "{name} recibe ~{amount} {currency}",
@@ -476,6 +494,15 @@ export const messages = {
         "Telefone salvo. Configure REMIFI_VAULT_ADDRESS no agente para escrow.",
       errorPrefix: "Não consegui montar essa transferência.",
       errorSuffix: "A API do agente está rodando? (npm run serve)",
+      chatGreeting:
+        "Olá! Sou a Remifi — diga quem e quanto, ex.: Transferir 50 dólares para Mamãe. Busco cotação Mento no agente e você confirma na Celo.",
+      chatThanks: "De nada! Diga Transferir 50 dólares para Mamãe quando quiser.",
+      chatHelp:
+        "Estou ligada ao agente Remifi em api.remifi.xyz. Diga quem e quanto — ex.: Transferir 50 dólares para Mamãe — e eu cotizo antes de confirmar.",
+      chatNeedAmount:
+        "Para quem e quanto? Tente: Transferir 50 dólares para Mamãe nas Filipinas.",
+      chatConfirmHint:
+        "Toque **Pagar** no cartão de cotação para confirmar — o agente executa na Celo.",
       confirmSuccess: "Sua transferência foi confirmada na Celo.",
       quoteLine: "Enviar {amount} {currency} → {name}",
       receiveLine: "{name} recebe ~{amount} {currency}",
@@ -690,6 +717,15 @@ export const messages = {
         "Téléphone enregistré. Configurez REMIFI_VAULT_ADDRESS sur l'agent pour l'escrow.",
       errorPrefix: "Je n'ai pas pu préparer ce transfert.",
       errorSuffix: "L'API agent est-elle active ? (npm run serve)",
+      chatGreeting:
+        "Bonjour ! Je suis Remifi — dites qui et combien, ex. Envoyer 50 euros à Maman. J'obtiens un devis Mento via l'agent, puis vous confirmez sur Celo.",
+      chatThanks: "Avec plaisir ! Dites Envoyer 50 euros à Maman quand vous voulez.",
+      chatHelp:
+        "Je suis branchée sur l'agent Remifi sur api.remifi.xyz. Dites qui et combien — ex. Envoyer 50 euros à Maman — et je quote avant confirmation.",
+      chatNeedAmount:
+        "À qui et combien ? Essayez : Envoyer 50 euros à Maman aux Philippines.",
+      chatConfirmHint:
+        "Appuyez sur **Payer** sur la carte de devis pour confirmer — l'agent exécute sur Celo.",
       confirmSuccess: "Votre transfert est confirmé sur Celo.",
       quoteLine: "Envoyer {amount} {currency} → {name}",
       receiveLine: "{name} reçoit ~{amount} {currency}",

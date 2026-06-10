@@ -102,6 +102,20 @@ export function mcpResourceForPath(path: string): McpResourceName | undefined {
   return REMIFI_MCP_RESOURCES.find((name) => MCP_RESOURCE_PATHS[name] === path);
 }
 
+/** 8004scan custom-service slugs (kebab-case) keyed by API path. */
+export const CUSTOM_SERVICE_BY_PATH: Record<string, string> = {
+  "/api/transfer": "send-money",
+  "/api/intent": "get-quote",
+  "/api/balance": "check-balance",
+  "/api/contacts": "list-contacts",
+  "/api/history": "get-history",
+  "/api/claim": "claim-transfer",
+  "/api/contacts/sync": "sync-contacts",
+  "/api/contacts/import-phone": "import-contacts",
+  "/api/x402/info": "compare-fees",
+  "/api/x402/premium-quote": "premium-quote",
+};
+
 export function mcpResourceUri(config: Config, name: McpResourceName): string {
   return `${apiBaseUrl(config)}${MCP_RESOURCE_PATHS[name]}`;
 }
@@ -126,6 +140,8 @@ export function buildMcpResourceDescriptor(
     : "GET";
 
   return {
+    status: "ok",
+    service: CUSTOM_SERVICE_BY_PATH[path] ?? name.replace(/_/g, "-"),
     resource: name,
     path,
     method,
@@ -133,6 +149,27 @@ export function buildMcpResourceDescriptor(
     auth: publicGet.has(path) ? null : { type: "api-key", header: "x-api-key" },
     agentId: config.agentId ?? null,
     chainId: config.celoChainId,
+    probe: true,
+  };
+}
+
+/** 8004scan custom-service probe for paths outside MCP_RESOURCE_PATHS. */
+export function buildCustomServiceProbe(
+  config: Config,
+  service: string,
+  path: string,
+  method: "GET" | "POST"
+) {
+  return {
+    status: "ok",
+    service,
+    path,
+    method,
+    public: false,
+    auth: { type: "api-key", header: "x-api-key" },
+    agentId: config.agentId ?? null,
+    chainId: config.celoChainId,
+    probe: true,
   };
 }
 
@@ -170,6 +207,15 @@ export function buildMcpManifest(config: Config) {
     },
     tools: [...REMIFI_MCP_TOOLS],
     prompts: [...REMIFI_MCP_PROMPTS],
+    resources: REMIFI_MCP_RESOURCES.map((name) => ({
+      name,
+      uri: mcpResourceUri(config, name),
+    })),
+    authentication: {
+      type: "api-key",
+      header: "x-api-key",
+      note: "Quotes and transfers require x-api-key. Discovery and HEAD/GET probes are public.",
+    },
   };
 
   if (config.agentId != null) {
