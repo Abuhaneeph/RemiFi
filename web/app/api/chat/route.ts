@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getDb, ensureSchema, isDbConfigured } from "../../lib/db";
+import { asRows, getDb, ensureSchema, isDbConfigured } from "../../lib/db";
 
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get("sessionId");
@@ -7,13 +7,15 @@ export async function GET(req: NextRequest) {
   try {
     await ensureSchema();
     const sql = getDb();
-    const rows = await sql`
-      SELECT id, role, text, metadata, created_at
-      FROM chat_messages
-      WHERE session_id = ${sessionId}
-      ORDER BY created_at ASC
-      LIMIT 200
-    `;
+    const rows = asRows<{ id: string; role: string; text: string; metadata: unknown; created_at: string }>(
+      await sql`
+        SELECT id, role, text, metadata, created_at
+        FROM chat_messages
+        WHERE session_id = ${sessionId}
+        ORDER BY created_at ASC
+        LIMIT 200
+      `
+    );
     return NextResponse.json({ messages: rows });
   } catch (err) {
     console.error("[chat GET]", err);
@@ -38,16 +40,22 @@ export async function POST(req: NextRequest) {
   try {
     await ensureSchema();
     const sql = getDb();
-    const [row] = await sql`
-      INSERT INTO chat_messages(session_id, role, text, metadata)
-      VALUES (
-        ${sessionId},
-        ${role},
-        ${text},
-        ${metadata != null ? JSON.stringify(metadata) : null}
-      )
-      RETURNING id, created_at
-    `;
+    const rows = asRows<{ id: string; created_at: string }>(
+      await sql`
+        INSERT INTO chat_messages(session_id, role, text, metadata)
+        VALUES (
+          ${sessionId},
+          ${role},
+          ${text},
+          ${metadata != null ? JSON.stringify(metadata) : null}
+        )
+        RETURNING id, created_at
+      `
+    );
+    const row = rows[0];
+    if (!row) {
+      return NextResponse.json({ error: "db error" }, { status: 500 });
+    }
     return NextResponse.json({ id: row.id, created_at: row.created_at });
   } catch (err) {
     console.error("[chat POST]", err);

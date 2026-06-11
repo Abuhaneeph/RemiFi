@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getDb, ensureSchema, isDbConfigured } from "../../lib/db";
+import { asRows, getDb, ensureSchema, isDbConfigured } from "../../lib/db";
 
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get("sessionId");
@@ -7,13 +7,15 @@ export async function GET(req: NextRequest) {
   try {
     await ensureSchema();
     const sql = getDb();
-    const rows = await sql`
-      SELECT id, title, body, unread, created_at
-      FROM notifications
-      WHERE session_id = ${sessionId}
-      ORDER BY created_at DESC
-      LIMIT 50
-    `;
+    const rows = asRows<{ id: string; title: string; body: string; unread: boolean; created_at: string }>(
+      await sql`
+        SELECT id, title, body, unread, created_at
+        FROM notifications
+        WHERE session_id = ${sessionId}
+        ORDER BY created_at DESC
+        LIMIT 50
+      `
+    );
     return NextResponse.json({ notifications: rows });
   } catch (err) {
     console.error("[notifications GET]", err);
@@ -38,11 +40,17 @@ export async function POST(req: NextRequest) {
   try {
     await ensureSchema();
     const sql = getDb();
-    const [row] = await sql`
-      INSERT INTO notifications(session_id, title, body)
-      VALUES (${sessionId}, ${title}, ${notifBody})
-      RETURNING id, created_at
-    `;
+    const rows = asRows<{ id: string; created_at: string }>(
+      await sql`
+        INSERT INTO notifications(session_id, title, body)
+        VALUES (${sessionId}, ${title}, ${notifBody})
+        RETURNING id, created_at
+      `
+    );
+    const row = rows[0];
+    if (!row) {
+      return NextResponse.json({ error: "db error" }, { status: 500 });
+    }
     return NextResponse.json({ id: row.id, created_at: row.created_at });
   } catch (err) {
     console.error("[notifications POST]", err);

@@ -17,6 +17,20 @@ export function getDb() {
 
 let schemaReady = false;
 
+/** Normalize Neon tagged-template results to a typed row array. */
+export function asRows<T extends Record<string, unknown>>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (
+    result &&
+    typeof result === "object" &&
+    "rows" in result &&
+    Array.isArray((result as { rows: unknown }).rows)
+  ) {
+    return (result as { rows: T[] }).rows;
+  }
+  return [];
+}
+
 export async function ensureSchema() {
   if (!isDbConfigured()) return;
   if (schemaReady) return;
