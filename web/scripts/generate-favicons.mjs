@@ -1,5 +1,5 @@
 /**
- * Generate favicon + app icons from public/logo.png
+ * Generate favicon + app icons from public/remifi (2).png
  *   npm run icons
  */
 import { mkdir } from "node:fs/promises";
@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const src = path.join(root, "public", "logo.png");
+const src = path.join(root, "public", "remifi (2).png");
 
 const outputs = [
   { file: "app/icon.png", size: 32 },

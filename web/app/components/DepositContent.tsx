@@ -36,7 +36,7 @@ export function DepositContent() {
 
   return (
     <>
-      <header className="flex items-center px-5 pb-3 pt-5">
+      <header className="mobile-only flex items-center px-5 pb-3 pt-5">
         <Link href="/home" className="icon-btn" aria-label={t("common.back")}>
           <ChevronLeftIcon className="h-5 w-5" />
         </Link>

@@ -21,7 +21,6 @@ export function AuthFlow() {
   }, [isConnected, router]);
 
   return (
-    <div className="phone">
       <div className="screen px-7 pb-8 pt-6">
         <div className="flex justify-end">
           <LanguageSelector variant="compact" />
@@ -73,6 +72,5 @@ export function AuthFlow() {
           </Link>
         </div>
       </div>
-    </div>
   );
 }

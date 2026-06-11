@@ -1,6 +1,8 @@
+import { ResponsiveShell } from "../../components/ResponsiveShell";
+
 export default function ProfileLoading() {
   return (
-    <div className="phone">
+    <ResponsiveShell>
       <div className="screen px-5 pb-8 pt-5">
         <div className="flex items-center justify-between">
           <div className="h-10 w-10 animate-pulse rounded-full bg-surface-subtle" />
@@ -21,6 +23,6 @@ export default function ProfileLoading() {
           ))}
         </div>
       </div>
-    </div>
+    </ResponsiveShell>
   );
 }

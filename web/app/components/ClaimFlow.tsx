@@ -88,7 +88,7 @@ export function ClaimFlow() {
 
   return (
     <div className="screen px-6 pb-10 pt-8">
-      <div className="flex justify-end">
+      <div className="mobile-only flex justify-end">
         <LanguageSelector variant="compact" />
       </div>
 

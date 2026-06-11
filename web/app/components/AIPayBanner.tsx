@@ -4,11 +4,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { useLanguage } from "../context/LanguageContext";
 
-export function AIPayBanner() {
+export function AIPayBanner({ compact = false }: { compact?: boolean }) {
   const { t } = useLanguage();
 
   return (
-    <div className="ai-pay-banner-wrap mt-7">
+    <div
+      className={
+        compact ? "ai-pay-banner-wrap ai-pay-banner-compact" : "ai-pay-banner-wrap mt-7"
+      }
+    >
       <Link href="/pay" className="ai-pay-banner">
         <div className="relative z-10 min-w-0 py-1 pr-36">
           <p className="text-[1.08rem] font-bold leading-tight text-ink-900">

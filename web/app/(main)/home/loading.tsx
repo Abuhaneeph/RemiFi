@@ -1,6 +1,8 @@
+import { ResponsiveShell } from "../../components/ResponsiveShell";
+
 export default function HomeLoading() {
   return (
-    <div className="phone">
+    <ResponsiveShell nav="home">
       <div className="screen screen-has-nav px-5 pt-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -32,6 +34,6 @@ export default function HomeLoading() {
           ))}
         </div>
       </div>
-    </div>
+    </ResponsiveShell>
   );
 }

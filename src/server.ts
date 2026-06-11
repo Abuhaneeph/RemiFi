@@ -35,6 +35,7 @@ import {
   type McpResourceName,
 } from "./agent/mcp-manifest.js";
 import { buildAgentRegistrationFile } from "./agent/registration-file.js";
+import { handleA2aJsonRpcMethod } from "./agent/public-rpc.js";
 import { agentRegistryId } from "./agent/registry-addresses.js";
 import {
   applySettleHeaders,
@@ -73,11 +74,19 @@ function sendJson(
   res.end(JSON.stringify(body));
 }
 
-async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+async function readBody(
+  req: IncomingMessage,
+  timeoutMs = 8000
+): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
+    const timer = setTimeout(
+      () => reject(new Error("Request body timeout")),
+      timeoutMs
+    );
     req.on("data", (chunk) => chunks.push(chunk as Buffer));
     req.on("end", () => {
+      clearTimeout(timer);
       const raw = Buffer.concat(chunks).toString("utf-8").trim();
       if (!raw) return resolve({});
       try {
@@ -86,8 +95,26 @@ async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> 
         reject(new Error("Invalid JSON body"));
       }
     });
-    req.on("error", reject);
+    req.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
   });
+}
+
+function wantsEventStream(req: IncomingMessage): boolean {
+  return (req.headers.accept ?? "").includes("text/event-stream");
+}
+
+/** Streamable HTTP: first SSE event for MCP clients and health probes. */
+function sendMcpSseEndpoint(res: ServerResponse) {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.end(
+    `event: endpoint\ndata: ${JSON.stringify({ version: MCP_PROTOCOL_VERSION })}\n\n`
+  );
 }
 
 function transferContext(body: Record<string, unknown>) {
@@ -175,6 +202,16 @@ async function handleMcpJsonRpc(
     return sendJson(res, 200, { jsonrpc: "2.0", id, result: {} });
   }
 
+  const a2a = handleA2aJsonRpcMethod(
+    method,
+    id,
+    cfg,
+    getAgentAddress(cfg)
+  );
+  if (a2a) {
+    return sendJson(res, 200, a2a);
+  }
+
   return sendJson(res, 200, {
     jsonrpc: "2.0",
     id,
@@ -203,8 +240,12 @@ function handle8004Probe(
 
   if (
     isReadMethod(req.method) &&
-    (path === "/mcp" || path === "/api/mcp")
+    (path === "/mcp" || path === "/api/mcp" || path === "/a2a")
   ) {
+    if (wantsEventStream(req)) {
+      sendMcpSseEndpoint(res);
+      return true;
+    }
     sendJson(
       res,
       200,
@@ -216,6 +257,11 @@ function handle8004Probe(
       },
       req.method
     );
+    return true;
+  }
+
+  if (isReadMethod(req.method) && path === "/ping") {
+    sendJson(res, 200, { status: "ok", service: "remifi-api" }, req.method);
     return true;
   }
 
@@ -260,7 +306,7 @@ const server = createServer(async (req, res) => {
   }
 
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
-  const path = url.pathname;
+  const path = url.pathname.replace(/\/+$/, "") || "/";
 
   try {
     if (isReadMethod(req.method) && path === "/") {
@@ -319,9 +365,16 @@ const server = createServer(async (req, res) => {
       (path === "/" ||
         path === "/mcp" ||
         path === "/api/mcp" ||
+        path === "/a2a" ||
         path === "/.well-known/mcp.json")
     ) {
-      return handleMcpJsonRpc(req, res, config);
+      try {
+        return await handleMcpJsonRpc(req, res, config);
+      } catch (err) {
+        const messageText =
+          err instanceof Error ? err.message : "JSON-RPC handler error";
+        return sendJson(res, 400, { error: messageText });
+      }
     }
 
     if (isReadMethod(req.method) && path === "/api/claim") {

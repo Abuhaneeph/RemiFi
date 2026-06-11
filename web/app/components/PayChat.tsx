@@ -318,9 +318,15 @@ export function PayChat() {
     });
   }, [messages, thinking]);
 
+  const hasStarted =
+    input.length > 0 || messages.some((m) => m.role === "user");
+  const visibleMessages = hasStarted
+    ? messages.filter((m) => m.id !== "intro")
+    : messages;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center px-5 pb-3 pt-5">
+      <header className="mobile-only flex shrink-0 items-center px-5 pb-3 pt-5">
         <Link href="/home" className="icon-btn" aria-label={t("common.back")}>
           <ChevronLeftIcon className="h-5 w-5" />
         </Link>
@@ -334,9 +340,9 @@ export function PayChat() {
 
       <div
         ref={scrollRef}
-        className="screen screen-has-composer gap-4 px-5 pt-1"
+        className="pay-chat-messages screen screen-has-composer min-h-0 flex-1 gap-4 px-5 pt-1"
       >
-        {messages.map((msg) =>
+        {visibleMessages.map((msg) =>
           msg.role === "bot" ? (
             <div key={msg.id} className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2">
@@ -425,20 +431,22 @@ export function PayChat() {
         )}
       </div>
 
-      <div className="pay-composer">
-        <div className="mb-3 grid grid-cols-2 gap-2">
-          {quickReplies.map((q) => (
-            <button
-              key={q.label}
-              type="button"
-              className="chip chip-pay-quick min-w-0"
-              disabled={thinking}
-              onClick={() => void sendMessage(q.label)}
-            >
-              {q.label}
-            </button>
-          ))}
-        </div>
+      <div className="pay-composer shrink-0">
+        {!hasStarted && (
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            {quickReplies.map((q) => (
+              <button
+                key={q.label}
+                type="button"
+                className="chip chip-pay-quick min-w-0"
+                disabled={thinking}
+                onClick={() => void sendMessage(q.label)}
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
+        )}
         <form
           className="flex items-center gap-2 rounded-[var(--radius-pill)] border border-line bg-surface p-1.5 pl-4 shadow-[0_16px_30px_-16px_rgba(15,15,20,0.35)]"
           onSubmit={(e) => {

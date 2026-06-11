@@ -29,8 +29,8 @@ function StepHero({ step }: { step: "welcome" | "ai-pay" | "people" }) {
           priority
           loading="eager"
           fetchPriority="high"
-          sizes="(max-width: 440px) 88vw, 340px"
-          className="animate-coin-bob relative w-[88%] max-w-[340px] drop-shadow-2xl"
+          sizes="(max-width: 440px) 88vw, 360px"
+          className="onboarding-hero-image animate-coin-bob relative w-[88%] max-w-[340px] drop-shadow-2xl"
         />
       </div>
     );
@@ -96,7 +96,6 @@ export function OnboardingFlow() {
             {t("onboarding.welcomeTitle2")}
           </>
         ),
-        subtitle: t("onboarding.welcomeSub"),
       },
       {
         id: "ai-pay" as const,
@@ -128,8 +127,7 @@ export function OnboardingFlow() {
   const isLast = step === steps.length - 1;
 
   return (
-    <div className="phone">
-      <div className="screen px-7 pb-8 pt-5">
+      <div className="onboarding-flow screen px-7 pb-8 pt-5">
         <div className="flex justify-end">
           <Link href="/home" className="chip">
             {t("common.skip")}
@@ -138,11 +136,15 @@ export function OnboardingFlow() {
 
         <StepHero step={current.id} />
 
-        <div key={current.id} className="animate-float-in mt-2 text-center">
-          <h1 className="text-[2.6rem] leading-[1.05] text-ink">{current.title}</h1>
-          <p className="mx-auto mt-4 max-w-[18rem] text-[0.95rem] leading-6 text-muted">
-            {current.subtitle}
-          </p>
+        <div key={current.id} className="onboarding-copy animate-float-in mt-2 text-center">
+          <h1 className="onboarding-title text-[2.6rem] leading-[1.05] text-ink">
+            {current.title}
+          </h1>
+          {current.subtitle ? (
+            <p className="onboarding-subtitle mx-auto mt-4 max-w-[18rem] text-[0.95rem] leading-6 text-muted">
+              {current.subtitle}
+            </p>
+          ) : null}
         </div>
 
         <div className="mt-7 flex items-center justify-center gap-2">
@@ -161,13 +163,12 @@ export function OnboardingFlow() {
         ) : (
           <button
             type="button"
-            className="btn btn-gradient btn-block mt-7"
+            className="btn btn-gradient onboarding-next-btn mt-7"
             onClick={() => setStep((s) => s + 1)}
           >
             {t("common.next")}
           </button>
         )}
       </div>
-    </div>
   );
 }
