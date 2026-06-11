@@ -227,7 +227,7 @@ End users should **never** paste private keys. See [howitworks.md §8–9](./how
 
 ---
 
-## Development
+## Development of agent 
 
 ```bash
 npm run dev          # One-shot agent message
