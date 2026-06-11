@@ -14,17 +14,24 @@
   "agents": {
     "defaults": {
       "skills": ["remifi"],
-      "model": "anthropic/claude-sonnet-4-6"
+      "model": "anthropic/claude-sonnet-4-6",
+      "workspace": ".",
+      "skipBootstrap": true
     },
     "list": [
       {
         "id": "remifi",
         "name": "Remifi",
+        "default": true,
         "workspace": ".",
         "skills": ["remifi"]
       }
     ]
   },
+  "bindings": [
+    { "agentId": "remifi", "match": { "channel": "telegram" } },
+    { "agentId": "remifi", "match": { "channel": "whatsapp" } }
+  ],
   "skills": {
     "entries": {
       "remifi": {
