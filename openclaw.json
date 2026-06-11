@@ -20,11 +20,16 @@
       {
         "id": "remifi",
         "name": "Remifi",
+        "default": true,
         "workspace": ".",
         "skills": ["remifi", "celo-builders"]
       }
     ]
   },
+  "bindings": [
+    { "agentId": "remifi", "match": { "channel": "telegram" } },
+    { "agentId": "remifi", "match": { "channel": "whatsapp" } }
+  ],
   "skills": {
     "entries": {
       "remifi": {
