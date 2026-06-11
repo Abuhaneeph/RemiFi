@@ -55,3 +55,11 @@ services:
         sync: false
       - key: THIRDWEB_SECRET_KEY
         sync: false
+      - key: X402_ENABLED
+        value: "true"
+      - key: X402_PRICE_USD
+        value: "0.01"
+      - key: X402_NETWORK
+        value: celo
+      - key: X402_TOKEN
+        value: USDC

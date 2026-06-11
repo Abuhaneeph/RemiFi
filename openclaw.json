@@ -13,7 +13,7 @@
   },
   "agents": {
     "defaults": {
-      "skills": ["remifi"],
+      "skills": ["remifi", "celo-builders"],
       "model": "anthropic/claude-sonnet-4-6"
     },
     "list": [
@@ -21,7 +21,7 @@
         "id": "remifi",
         "name": "Remifi",
         "workspace": ".",
-        "skills": ["remifi"]
+        "skills": ["remifi", "celo-builders"]
       }
     ]
   },
@@ -34,6 +34,9 @@
           "AGENT_API_KEY": "${AGENT_API_KEY}",
           "REQUIRE_CONFIRMATION_ABOVE_USD": "${REQUIRE_CONFIRMATION_ABOVE_USD}"
         }
+      },
+      "celo-builders": {
+        "enabled": true
       }
     },
     "load": {

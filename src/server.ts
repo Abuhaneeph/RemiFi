@@ -41,6 +41,8 @@ import {
   applySettleHeaders,
   buildPaymentRequirements,
   settleX402Payment,
+  x402ResourceUrl,
+  isX402Ready,
 } from "./x402/handler.js";
 
 const config = loadConfig();
@@ -329,6 +331,8 @@ const server = createServer(async (req, res) => {
         chainId: config.celoChainId,
         agentId: config.agentId ?? null,
         executionReady,
+        x402Ready: isX402Ready(config),
+        x402Enabled: config.x402Enabled,
         vaultConfigured: Boolean(config.remifiVaultAddress),
         contactsCount: listContacts(config).length,
         timestamp: new Date().toISOString(),
@@ -414,7 +418,7 @@ const server = createServer(async (req, res) => {
 
     // ── x402: payment requirements for the premium quote endpoint ──
     if (isReadMethod(req.method) && path === "/api/x402/info") {
-      const resourceUrl = `${url.origin}/api/x402/premium-quote`;
+      const resourceUrl = x402ResourceUrl(config, "/api/x402/premium-quote");
       res.setHeader("Accept-Payment", "x402");
       return sendJson(
         res,
@@ -429,7 +433,7 @@ const server = createServer(async (req, res) => {
       (req.method === "GET" || req.method === "POST") &&
       path === "/api/x402/premium-quote"
     ) {
-      const resourceUrl = `${url.origin}/api/x402/premium-quote`;
+      const resourceUrl = x402ResourceUrl(config, "/api/x402/premium-quote");
       const settled = await settleX402Payment(
         config,
         req,

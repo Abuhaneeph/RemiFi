@@ -9,6 +9,7 @@ coverage/
 .vitest/
 *.tsbuildinfo
 .openclaw/
+data/celo-builders.connection
 
 # Foundry build artifacts
 contract/cache/
