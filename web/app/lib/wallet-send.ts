@@ -1,5 +1,6 @@
 import { getContract, prepareContractCall, sendTransaction } from "thirdweb";
-import type { Account, Address } from "thirdweb";
+import type { Address } from "thirdweb";
+import type { Account } from "thirdweb/wallets";
 import { celoChain, getThirdwebClient } from "./thirdweb";
 import { usdcAddress } from "./ramp";
 
@@ -13,7 +14,7 @@ function parseTokenAmount(value: string, decimals: number): bigint | null {
   const padded = frac.padEnd(decimals, "0");
   try {
     const units = BigInt(whole + padded);
-    return units > 0n ? units : null;
+    return units > BigInt(0) ? units : null;
   } catch {
     return null;
   }
