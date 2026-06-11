@@ -40,6 +40,24 @@ export function extractPaymentHeader(req: IncomingMessage): string | null {
   return Array.isArray(raw) ? raw[0] : raw;
 }
 
+/** Public HTTPS URL for x402 payment requirements (never use internal http:// origin). */
+export function x402ResourceUrl(config: Config, path: string): string {
+  const base =
+    config.publicAgentApiUrl?.replace(/\/$/, "") ??
+    config.publicBaseUrl?.replace(/\/$/, "") ??
+    "";
+  const suffix = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${suffix}`;
+}
+
+export function isX402Ready(config: Config): boolean {
+  return Boolean(
+    config.x402Enabled &&
+      config.thirdwebSecretKey?.trim() &&
+      getAgentAddress(config)
+  );
+}
+
 /** Manual 402 body when thirdweb facilitator is not configured. */
 export function buildPaymentRequirements(
   config: Config,

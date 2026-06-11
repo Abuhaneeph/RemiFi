@@ -8,6 +8,15 @@ import { AppHeader } from "./AppHeader";
 import { BalanceSection } from "./BalanceSection";
 import { HomeContacts } from "./HomeContacts";
 
+const WalletAssets = dynamic(
+  () => import("./WalletAssets").then((m) => m.WalletAssets),
+  {
+    loading: () => (
+      <div className="mt-7 h-40 animate-pulse rounded-[var(--radius-lg)] bg-surface-subtle" />
+    ),
+  }
+);
+
 const AddContactAutoOpen = dynamic(
   () =>
     import("./AddContactAutoOpen").then((m) => m.AddContactAutoOpen),
@@ -25,6 +34,7 @@ export function HomeScreenContent() {
         <BalanceSection />
         <ActionButtons />
         <HomeContacts />
+        <WalletAssets limit={4} showMoreLink />
         <AIPayBanner />
       </div>
     </>

@@ -35,6 +35,7 @@
   "dependencies": {
     "@mento-protocol/mento-sdk": "^3.0.0",
     "dotenv": "^16.4.7",
+    "thirdweb": "^5.120.1",
     "twilio": "^5.4.0",
     "viem": "^2.23.0",
     "zod": "^3.24.1"

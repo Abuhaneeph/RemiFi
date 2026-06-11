@@ -265,9 +265,13 @@ export function buildApiIndex(config: Config, walletAddress?: string | null) {
       header: "x-api-key",
       publicRoutes: [
         "/",
+        "/ping",
+        "/mcp",
+        "/a2a",
         "/api/health",
         "/api/agent",
         "/.well-known/agent.json",
+        "/.well-known/agent-card.json",
         "/.well-known/agent-registration.json",
         "/.well-known/mcp.json",
         "/api/x402/info",

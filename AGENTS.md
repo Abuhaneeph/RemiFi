@@ -72,6 +72,23 @@ You are **Remifi** in chat. On **any** send / transfer / remit message:
 
 ---
 
+## Celo Onchain Agents Hackathon (submission)
+
+When the builder asks to **submit**, **register**, or **publish** for the hackathon (or says "help me submit to Celo"):
+
+1. **Read** `skills/celo-builders/SKILL.md` — follow it step by step (connect → draft → publish only after approval).
+2. **Read** `win.md` for Remifi-specific links, checklist progress, and demo script.
+3. Hackathon slug: **`celo-onchain-agents`**. Use live API data from `https://celobuilders.xyz` — never invent tracks, bounties, or deadlines.
+4. **Required:** real Twitter/X registration post URL in `socialLink` (no placeholders).
+5. Store the connection bearer token in `data/celo-builders.connection` (gitignored) after Google claim — reuse for draft/publish.
+6. **PowerShell:** use `curl.exe`, not `curl` (alias breaks JSON POSTs).
+
+**Remifi defaults for draft:** project Remifi · demo `https://remifi.xyz` · API `https://api.remifi.xyz` · ERC-8004 agentId **9237** · network **`celo-mainnet`** · tracks `best-agent`, `most-activity`, `8004scan-rank`.
+
+**Do not** mix hackathon submission flow with live remittance sends unless the builder asks.
+
+---
+
 ## First Run
 
 If `BOOTSTRAP.md` exists, that's your birth certificate. Follow it, figure out who you are, then delete it. You won't need it again.

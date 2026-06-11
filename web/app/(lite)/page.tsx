@@ -1,5 +1,10 @@
 import { OnboardingFlow } from "../components/OnboardingFlow";
+import { ResponsiveShell } from "../components/ResponsiveShell";
 
 export default function OnboardingScreen() {
-  return <OnboardingFlow />;
+  return (
+    <ResponsiveShell desktopMode="centered" bareMobile>
+      <OnboardingFlow />
+    </ResponsiveShell>
+  );
 }

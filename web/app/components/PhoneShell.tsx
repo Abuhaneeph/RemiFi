@@ -1,17 +1,31 @@
 import type { ReactNode } from "react";
-import { BottomNav, type NavTab } from "./BottomNav";
+import { ResponsiveShell } from "./ResponsiveShell";
+import type { NavTab } from "./BottomNav";
 
 export function PhoneShell({
   children,
   nav,
+  desktop,
+  title,
+  flush,
+  desktopMode,
 }: {
   children: ReactNode;
   nav?: NavTab;
+  desktop?: ReactNode;
+  title?: string;
+  flush?: boolean;
+  desktopMode?: "dashboard" | "centered";
 }) {
   return (
-    <div className="phone">
-      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
-      {nav && <BottomNav active={nav} />}
-    </div>
+    <ResponsiveShell
+      nav={nav}
+      desktop={desktop}
+      title={title}
+      flush={flush}
+      desktopMode={desktopMode}
+    >
+      {children}
+    </ResponsiveShell>
   );
 }

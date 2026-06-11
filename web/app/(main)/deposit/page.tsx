@@ -3,7 +3,7 @@ import { DepositContent } from "../../components/DepositContent";
 
 export default function DepositScreen() {
   return (
-    <PhoneShell>
+    <PhoneShell title="Deposit">
       <DepositContent />
     </PhoneShell>
   );

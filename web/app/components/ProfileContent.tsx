@@ -6,6 +6,7 @@ import { PROFILE } from "../data/people";
 import { useLanguage } from "../context/LanguageContext";
 import { Avatar } from "./Avatar";
 import { LanguageSelector } from "./LanguageSelector";
+import { LogoutButton } from "./LogoutButton";
 import { ProfileSettings } from "./ProfileSettings";
 import { ChevronLeftIcon } from "./icons";
 
@@ -32,7 +33,7 @@ export function ProfileContent() {
 
   return (
     <>
-      <header className="flex items-center px-5 pb-3 pt-5">
+      <header className="mobile-only flex items-center px-5 pb-3 pt-5">
         <Link href="/home" className="icon-btn" aria-label={t("common.back")}>
           <ChevronLeftIcon className="h-5 w-5" />
         </Link>
@@ -53,6 +54,7 @@ export function ProfileContent() {
         <WalletAssets />
 
         <ProfileSettings />
+        <LogoutButton />
 
         <Link href="/people" className="btn btn-gradient btn-block mt-8">
           {t("profile.manageContacts")}

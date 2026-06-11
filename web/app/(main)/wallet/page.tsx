@@ -3,6 +3,7 @@ import { AppHeader } from "../../components/AppHeader";
 import { ActionButtons } from "../../components/ActionButtons";
 import { BalanceSection } from "../../components/BalanceSection";
 import { PhoneShell } from "../../components/PhoneShell";
+import { WalletDashboard } from "../../components/WalletDashboard";
 
 const WalletAssets = dynamic(
   () => import("../../components/WalletAssets").then((m) => m.WalletAssets),
@@ -15,7 +16,7 @@ const WalletAssets = dynamic(
 
 export default function WalletScreen() {
   return (
-    <PhoneShell nav="wallet">
+    <PhoneShell nav="wallet" desktop={<WalletDashboard />} title="Wallet">
       <div className="screen screen-has-nav px-5 pt-5">
         <AppHeader />
         <BalanceSection />

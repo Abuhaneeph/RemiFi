@@ -54,8 +54,6 @@ export function MoonPayOnRamp() {
         <p className="mt-2 text-center text-xs text-soft">{t("deposit.moonpayNotConfigured")}</p>
       ) : !fiatRampEnabled() && !moonpaySandboxMode() ? (
         <p className="mt-2 text-center text-xs text-soft">{t("deposit.fiatMainnetOnly")}</p>
-      ) : moonpaySandboxMode() ? (
-        <p className="mt-2 text-center text-xs text-muted">{t("deposit.moonpaySandboxHint")}</p>
       ) : null}
 
       {error ? <p className="mt-2 text-center text-xs text-brand-600">{error}</p> : null}

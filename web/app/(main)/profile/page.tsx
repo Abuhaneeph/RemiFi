@@ -5,7 +5,7 @@ import { PhoneShell } from "../../components/PhoneShell";
 
 export default function ProfileScreen() {
   return (
-    <PhoneShell>
+    <PhoneShell title="Profile">
       <ProfileContent />
     </PhoneShell>
   );

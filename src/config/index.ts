@@ -79,6 +79,12 @@ const ConfigSchema = z
 
 export type Config = z.infer<typeof ConfigSchema>;
 
+/** Empty env vars become undefined so optional Zod fields (e.g. address regex) pass. */
+function envOptional(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 export function loadConfig(): Config {
   return ConfigSchema.parse({
     celoRpcUrl: process.env.CELO_RPC_URL,
@@ -99,8 +105,8 @@ export function loadConfig(): Config {
     agentApiPort: process.env.PORT ?? process.env.AGENT_API_PORT,
     agentApiKey: process.env.AGENT_API_KEY,
     webOrigin: process.env.WEB_ORIGIN,
-    demoRecipientAddress: process.env.DEMO_RECIPIENT_ADDRESS,
-    remifiVaultAddress: process.env.REMIFI_VAULT_ADDRESS,
+    demoRecipientAddress: envOptional(process.env.DEMO_RECIPIENT_ADDRESS),
+    remifiVaultAddress: envOptional(process.env.REMIFI_VAULT_ADDRESS),
 
     identityRegistryAddress: process.env.IDENTITY_REGISTRY_ADDRESS,
     reputationRegistryAddress: process.env.REPUTATION_REGISTRY_ADDRESS,

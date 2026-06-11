@@ -1,5 +1,6 @@
 import dynamic from "next/dynamic";
 import { Suspense } from "react";
+import { ResponsiveShell } from "../../components/ResponsiveShell";
 
 const PayChat = dynamic(
   () => import("../../components/PayChat").then((m) => m.PayChat),
@@ -18,10 +19,10 @@ const PayChat = dynamic(
 
 export default function PayScreen() {
   return (
-    <div className="phone">
+    <ResponsiveShell title="AI Pay" flush>
       <Suspense fallback={null}>
         <PayChat />
       </Suspense>
-    </div>
+    </ResponsiveShell>
   );
 }

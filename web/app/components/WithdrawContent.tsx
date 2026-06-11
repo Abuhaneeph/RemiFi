@@ -2,28 +2,63 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useWallet, shortAddress } from "../context/WalletContext";
+import type { Address } from "thirdweb";
+import { useActiveAccount } from "thirdweb/react";
+import { useWallet } from "../context/WalletContext";
 import { useLanguage } from "../context/LanguageContext";
+import { isValidWalletAddress, parseWalletFromQr } from "../lib/qr";
+import { sendUsdcFromWallet } from "../lib/wallet-send";
 import { ChevronLeftIcon } from "./icons";
-import { OffRampPartners } from "./OffRampPartners";
 import { ConnectWallet } from "./ConnectWallet";
+import { MoonPayOffRamp } from "./MoonPayOffRamp";
 
 export function WithdrawContent() {
   const { address, isConnected } = useWallet();
+  const account = useActiveAccount();
   const { t } = useLanguage();
   const [external, setExternal] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
 
-  const copyWallet = async () => {
-    if (!address) return;
-    await navigator.clipboard.writeText(address);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
+  const recipient = external.trim();
+  const canSend =
+    isValidWalletAddress(recipient) &&
+    Number(amount) > 0 &&
+    !sending &&
+    Boolean(account);
+
+  const handleSend = async () => {
+    if (!account || !canSend) return;
+    if (recipient.toLowerCase() === address?.toLowerCase()) {
+      setError(t("withdraw.sameWallet"));
+      return;
+    }
+
+    setSending(true);
+    setError(null);
+    setTxHash(null);
+
+    try {
+      const hash = await sendUsdcFromWallet(
+        account,
+        recipient as Address,
+        amount
+      );
+      setTxHash(hash);
+      setAmount("");
+      setExternal("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("withdraw.sendFailed"));
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
     <>
-      <header className="flex items-center px-5 pb-3 pt-5">
+      <header className="mobile-only flex items-center px-5 pb-3 pt-5">
         <Link href="/home" className="icon-btn" aria-label={t("common.back")}>
           <ChevronLeftIcon className="h-5 w-5" />
         </Link>
@@ -34,42 +69,73 @@ export function WithdrawContent() {
       </header>
 
       <div className="screen px-5 pb-8">
-        <p className="text-sm text-muted">{t("withdraw.subtitle")}</p>
-
         {!isConnected || !address ? (
           <div className="mt-8">
             <ConnectWallet label={t("withdraw.connectFirst")} />
           </div>
         ) : (
           <>
-            <OffRampPartners />
+            <div className="mt-6">
+              <MoonPayOffRamp />
+            </div>
 
-            <section className="mt-7">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-                {t("withdraw.externalTitle")}
-              </p>
-              <p className="mt-2 text-sm text-muted">{t("withdraw.externalHint")}</p>
+            <p className="my-5 text-center text-xs text-soft">
+              {t("withdraw.orSendWallet")}
+            </p>
+
+            <section className="rounded-[var(--radius-lg)] border border-line bg-surface p-5">
+              <p className="text-sm font-semibold text-ink">{t("withdraw.externalTitle")}</p>
               <input
                 type="text"
                 value={external}
-                onChange={(e) => setExternal(e.target.value)}
+                onChange={(e) => {
+                  setExternal(e.target.value);
+                  setError(null);
+                  setTxHash(null);
+                }}
+                onBlur={() => {
+                  const parsed = parseWalletFromQr(external);
+                  if (parsed) setExternal(parsed);
+                }}
+                onPaste={(e) => {
+                  const parsed = parseWalletFromQr(e.clipboardData.getData("text"));
+                  if (parsed) {
+                    e.preventDefault();
+                    setExternal(parsed);
+                  }
+                }}
                 placeholder="0x…"
                 className="form-field mt-3 w-full font-mono text-sm"
                 spellCheck={false}
               />
-              <p className="mt-2 text-xs text-soft">{t("withdraw.externalNote")}</p>
-            </section>
-
-            <section className="summary-card mt-6">
-              <p className="text-sm font-semibold text-ink">{t("withdraw.yourWallet")}</p>
-              <p className="mt-1 font-mono text-sm text-brand-700">{shortAddress(address)}</p>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => {
+                  setAmount(e.target.value);
+                  setError(null);
+                  setTxHash(null);
+                }}
+                placeholder={t("withdraw.amountPlaceholder")}
+                className="form-field mt-3 w-full text-sm"
+              />
               <button
                 type="button"
-                className="btn btn-outline mt-3 px-5"
-                onClick={() => void copyWallet()}
+                className="btn btn-gradient btn-block mt-4"
+                disabled={!canSend}
+                onClick={() => void handleSend()}
               >
-                {copied ? t("deposit.copied") : t("deposit.copy")}
+                {sending ? t("withdraw.sending") : t("withdraw.send")}
               </button>
+              {error ? (
+                <p className="mt-2 text-center text-xs text-brand-600">{error}</p>
+              ) : null}
+              {txHash ? (
+                <p className="mt-2 text-center text-xs text-accent-600">
+                  {t("withdraw.sent")}
+                </p>
+              ) : null}
             </section>
           </>
         )}

@@ -1,5 +1,6 @@
 import dynamic from "next/dynamic";
 import { Suspense } from "react";
+import { ResponsiveShell } from "../../components/ResponsiveShell";
 
 const ClaimFlow = dynamic(
   () => import("../../components/ClaimFlow").then((m) => m.ClaimFlow),
@@ -14,10 +15,10 @@ const ClaimFlow = dynamic(
 
 export default function ClaimPage() {
   return (
-    <div className="phone">
+    <ResponsiveShell title="Claim">
       <Suspense fallback={null}>
         <ClaimFlow />
       </Suspense>
-    </div>
+    </ResponsiveShell>
   );
 }

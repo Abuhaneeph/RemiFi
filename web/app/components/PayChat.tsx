@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { Avatar } from "./Avatar";
 import { AgentStatusBanner } from "./AgentStatusBanner";
 import {
@@ -11,7 +11,7 @@ import {
   formatSuccessText,
 } from "../lib/pay-format";
 import { ASSISTANT, PROFILE } from "../data/people";
-import { BoltIcon, ChevronLeftIcon, MicIcon } from "./icons";
+import { BoltIcon, ChevronLeftIcon, ContactPickerIcon, MicIcon } from "./icons";
 import { useAgentApi } from "../context/AgentApiContext";
 import { useContacts } from "../context/ContactsContext";
 import { useLanguage } from "../context/LanguageContext";
@@ -20,12 +20,13 @@ import {
   extractRecipientName,
   matchContact,
 } from "../lib/contacts";
+import { normalizePayMessage, payErrorHint } from "../lib/pay-message";
 import {
-  classifyPayMessage,
-  normalizePayMessage,
-  payChatReplyKey,
-  payErrorHint,
-} from "../lib/pay-message";
+  fetchPayAgentReply,
+  isOpenClawConfigured,
+  isOpenClawReachable,
+  toAgentHistory,
+} from "../lib/pay-agent";
 import {
   executeTransfer,
   fetchQuote,
@@ -37,6 +38,8 @@ import { listenForSpeech, speechLocale, speechRecognitionSupported } from "../li
 import { FxRateBanner } from "./FxRateBanner";
 import { RateAlertSheet } from "./RateAlertSheet";
 import { TxReceiptShare } from "./TxReceiptShare";
+import { formatAgentReply } from "../lib/format-agent-reply";
+import { getSessionId } from "../lib/session";
 
 type Message =
   | {
@@ -63,6 +66,34 @@ type Message =
     }
   | { id: string; role: "user"; text: string };
 
+/** Fire-and-forget: persist a single message to Neon. */
+function persistMessage(
+  sessionId: string,
+  role: "user" | "bot",
+  text: string
+) {
+  if (!sessionId) return;
+  fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId, role, text }),
+  }).catch(() => {});
+}
+
+/** Fire-and-forget: add a notification to Neon. */
+export function addNotification(
+  sessionId: string,
+  title: string,
+  body: string
+) {
+  if (!sessionId) return;
+  fetch("/api/notifications", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId, title, body }),
+  }).catch(() => {});
+}
+
 export function PayChat() {
   const searchParams = useSearchParams();
   const presetTo = searchParams.get("to");
@@ -71,6 +102,11 @@ export function PayChat() {
   const { allPeople } = useContacts();
   const { refreshBalancesAfterSend } = useAgentApi();
   const { t, locale } = useLanguage();
+
+  const sessionId = useRef("");
+  useEffect(() => {
+    sessionId.current = getSessionId();
+  }, []);
 
   const quickReplies = useMemo(
     () => [
@@ -87,24 +123,79 @@ export function PayChat() {
     return "";
   });
   const [messages, setMessages] = useState<Message[]>([]);
+  const historyLoaded = useRef(false);
   const presetSent = useRef(false);
   const [thinking, setThinking] = useState(false);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [listening, setListening] = useState(false);
   const [alertQuote, setAlertQuote] = useState<QuoteResponse | null>(null);
   const [alertOpen, setAlertOpen] = useState(false);
+  const [contactPickerSupported, setContactPickerSupported] = useState(false);
+  const [openClawMode, setOpenClawMode] = useState(false);
+  const [openClawOnline, setOpenClawOnline] = useState(true);
   const stopSpeechRef = useRef<(() => void) | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setMessages([{ id: "intro", role: "bot", text: t("pay.intro") }]);
-  }, [locale, t]);
+    void (async () => {
+      const configured = await isOpenClawConfigured();
+      setOpenClawMode(configured);
+      if (configured) {
+        setOpenClawOnline(await isOpenClawReachable());
+      }
+    })();
+  }, []);
 
-  const appendBot = (msg: Omit<Extract<Message, { role: "bot" }>, "id" | "role">) =>
-    setMessages((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), role: "bot", ...msg },
-    ]);
+  useEffect(() => {
+    setContactPickerSupported(
+      typeof navigator !== "undefined" &&
+        "contacts" in navigator &&
+        "ContactsManager" in window
+    );
+  }, []);
+
+  // Load chat history from Neon on mount
+  useEffect(() => {
+    if (historyLoaded.current) return;
+    historyLoaded.current = true;
+    const sid = getSessionId();
+    sessionId.current = sid;
+    fetch(`/api/chat?sessionId=${sid}`)
+      .then((r) => r.json())
+      .then((data: { messages?: Array<{ id: string; role: string; text: string }> }) => {
+        const hist = data.messages ?? [];
+        if (hist.length > 0) {
+          setMessages(
+            hist.map((m) => ({
+              id: m.id,
+              role: m.role as "user" | "bot",
+              text: m.text,
+            }))
+          );
+        } else {
+          setMessages([{ id: "intro", role: "bot", text: t("pay.intro") }]);
+        }
+      })
+      .catch(() => {
+        setMessages([{ id: "intro", role: "bot", text: t("pay.intro") }]);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (historyLoaded.current && messages.length === 0) {
+      setMessages([{ id: "intro", role: "bot", text: t("pay.intro") }]);
+    }
+  }, [locale, t, messages.length]);
+
+  const appendBot = useCallback(
+    (msg: Omit<Extract<Message, { role: "bot" }>, "id" | "role">) => {
+      const id = crypto.randomUUID();
+      setMessages((prev) => [...prev, { id, role: "bot", ...msg }]);
+      persistMessage(sessionId.current, "bot", msg.text);
+    },
+    []
+  );
 
   const contactForMessage = (text: string) => {
     if (presetTo) {
@@ -113,6 +204,105 @@ export function PayChat() {
     }
     const name = extractRecipientName(text);
     return matchContact(name, allPeople);
+  };
+
+  const sendViaOpenClaw = async (trimmed: string) => {
+    const history = toAgentHistory(
+      messages
+        .filter((m) => m.id !== "intro")
+        .map((m) => ({ role: m.role, text: m.text }))
+    );
+    const { reply, error } = await fetchPayAgentReply(
+      sessionId.current,
+      history,
+      trimmed
+    );
+    if (reply) {
+      appendBot({ text: formatAgentReply(reply) });
+      if (/\b(sent|confirmed|tx hash|0x[a-fA-F0-9]{64})\b/i.test(reply)) {
+        void refreshBalancesAfterSend(0);
+      }
+      setOpenClawOnline(true);
+      return;
+    }
+    setOpenClawOnline(false);
+    appendBot({ text: error ?? t("pay.agentUnavailable") });
+  };
+
+  const sendViaDirectApi = async (
+    trimmed: string,
+    extraCtx?: TransferContext
+  ) => {
+    const pendingConfirm = [...messages]
+      .reverse()
+      .find(
+        (m): m is Extract<Message, { role: "bot" }> =>
+          m.role === "bot" && Boolean(m.confirm)
+      );
+    if (pendingConfirm?.confirm) {
+      if (/^(yes|yeah|yep|si|sí|oui|confirm|ok|okay|send|enviar)$/i.test(trimmed)) {
+        await handleInlineConfirm(pendingConfirm.id, pendingConfirm.confirm);
+        return;
+      }
+      if (/^(no|nope|cancel|cancelar|annuler)$/i.test(trimmed)) {
+        dismissConfirm(pendingConfirm.id);
+        appendBot({ text: t("pay.cancelled") });
+        return;
+      }
+    }
+
+    const activeContact = contactForMessage(trimmed);
+    const ctx = {
+      ...contactTransferContext(activeContact),
+      ...extraCtx,
+    };
+    const apiMessage = normalizePayMessage(trimmed, activeContact);
+    const quote = await fetchQuote(apiMessage, ctx);
+
+    if (quote.kind === "schedule") {
+      appendBot({ text: quote.summary, quote });
+      return;
+    }
+
+    const hits = checkRateAlerts(
+      quote.intent.sourceCurrency,
+      quote.destinationCurrency ?? "",
+      quote.intent.destinationCountry,
+      quote.exchangeRate
+    );
+    const alertNote =
+      hits.length > 0
+        ? `\n\n${t("rateAlerts.hit", {
+            rate: hits[0].currentRate.toFixed(4),
+            currency: hits[0].alert.destinationCurrency,
+          })}`
+        : "";
+
+    const recipientName =
+      quote.intent.recipientName ?? activeContact?.name ?? "your recipient";
+
+    let extra = "";
+    if (!ctx?.recipientWallet && !ctx?.recipientPhone) {
+      extra = `\n\n${t("pay.addContactHint")}`;
+    } else if (quote.deliveryMethod === "escrow") {
+      extra = `\n\n${t("pay.escrowHint")}`;
+    } else if (ctx?.recipientPhone && !ctx?.recipientWallet) {
+      extra = `\n\n${t("pay.vaultHint")}`;
+    }
+
+    appendBot({
+      text: `${formatQuoteText(quote, recipientName, t)}${alertNote}${extra}`,
+      confirm: {
+        label: t("pay.confirmSend", {
+          amount: quote.intent.amount,
+          currency: quote.intent.sourceCurrency,
+          name: recipientName,
+        }),
+        message: apiMessage,
+        quote,
+        ctx,
+      },
+    });
   };
 
   const sendMessage = async (
@@ -127,69 +317,17 @@ export function PayChat() {
       ...prev,
       { id: crypto.randomUUID(), role: "user", text: trimmed },
     ]);
+    persistMessage(sessionId.current, "user", trimmed);
     if (!silent) setInput("");
     setThinking(true);
 
     try {
-      const chatKind = classifyPayMessage(trimmed);
-      if (chatKind !== "remittance") {
-        appendBot({ text: t(payChatReplyKey(chatKind)) });
+      if (openClawMode) {
+        await sendViaOpenClaw(trimmed);
         return;
       }
 
-      const activeContact = contactForMessage(trimmed);
-      const ctx = {
-        ...contactTransferContext(activeContact),
-        ...extraCtx,
-      };
-      const apiMessage = normalizePayMessage(trimmed, activeContact);
-
-      const quote = await fetchQuote(apiMessage, ctx);
-
-      if (quote.kind === "schedule") {
-        appendBot({ text: quote.summary, quote });
-        return;
-      }
-
-      const hits = checkRateAlerts(
-        quote.intent.sourceCurrency,
-        quote.destinationCurrency ?? "",
-        quote.intent.destinationCountry,
-        quote.exchangeRate
-      );
-      const alertNote =
-        hits.length > 0
-          ? `\n\n${t("rateAlerts.hit", {
-              rate: hits[0].currentRate.toFixed(4),
-              currency: hits[0].alert.destinationCurrency,
-            })}`
-          : "";
-
-      const recipientName =
-        quote.intent.recipientName ?? activeContact?.name ?? "your recipient";
-
-      let extra = "";
-      if (!ctx?.recipientWallet && !ctx?.recipientPhone) {
-        extra = `\n\n${t("pay.addContactHint")}`;
-      } else if (quote.deliveryMethod === "escrow") {
-        extra = `\n\n${t("pay.escrowHint")}`;
-      } else if (ctx?.recipientPhone && !ctx?.recipientWallet) {
-        extra = `\n\n${t("pay.vaultHint")}`;
-      }
-
-      appendBot({
-        text: `${formatQuoteText(quote, recipientName, t)}${extra}`,
-        confirm: {
-          label: t("pay.confirmSend", {
-            amount: quote.intent.amount,
-            currency: quote.intent.sourceCurrency,
-            name: recipientName,
-          }),
-          message: apiMessage,
-          quote,
-          ctx,
-        },
-      });
+      await sendViaDirectApi(trimmed, extraCtx);
     } catch (err) {
       const reason = err instanceof Error ? err.message : "Something went wrong";
       appendBot({
@@ -240,6 +378,12 @@ export function PayChat() {
         confirm.quote.intent.amount + (confirm.quote.mentoFeeUsd ?? 0);
       await refreshBalancesAfterSend(sentTotal);
 
+      addNotification(
+        sessionId.current,
+        "Payment sent",
+        `$${confirm.quote.intent.amount} ${confirm.quote.intent.sourceCurrency} sent to ${recipientName}.`
+      );
+
       setMessages((prev) =>
         prev.map((m) =>
           m.id === msgId && m.role === "bot" ? { ...m, confirm: undefined } : m
@@ -281,6 +425,26 @@ export function PayChat() {
     }
   };
 
+  const pickContact = async () => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const contacts = await (navigator as any).contacts.select(["name", "tel"], {
+        multiple: false,
+      });
+      if (!contacts || contacts.length === 0) return;
+      const contact = contacts[0];
+      const name = Array.isArray(contact.name) ? contact.name[0] : contact.name;
+      const tel = Array.isArray(contact.tel) ? contact.tel[0] : contact.tel;
+      if (name) {
+        setInput(`Send $50 to ${name}`);
+      } else if (tel) {
+        setInput(`Send $50 to ${tel}`);
+      }
+    } catch {
+      // User cancelled or API unavailable
+    }
+  };
+
   const toggleVoice = () => {
     if (listening) {
       stopSpeechRef.current?.();
@@ -318,9 +482,15 @@ export function PayChat() {
     });
   }, [messages, thinking]);
 
+  const hasStarted =
+    input.length > 0 || messages.some((m) => m.role === "user");
+  const visibleMessages = hasStarted
+    ? messages.filter((m) => m.id !== "intro")
+    : messages;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex shrink-0 items-center px-5 pb-3 pt-5">
+      <header className="mobile-only flex shrink-0 items-center px-5 pb-3 pt-5">
         <Link href="/home" className="icon-btn" aria-label={t("common.back")}>
           <ChevronLeftIcon className="h-5 w-5" />
         </Link>
@@ -332,11 +502,17 @@ export function PayChat() {
 
       <AgentStatusBanner />
 
+      {openClawMode && !openClawOnline ? (
+        <div className="mx-5 mb-2 rounded-[var(--radius-lg)] border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800">
+          {t("pay.openClawOffline")}
+        </div>
+      ) : null}
+
       <div
         ref={scrollRef}
-        className="screen screen-has-composer gap-4 px-5 pt-1"
+        className="pay-chat-messages screen screen-has-composer min-h-0 flex-1 gap-4 px-5 pt-1"
       >
-        {messages.map((msg) =>
+        {visibleMessages.map((msg) =>
           msg.role === "bot" ? (
             <div key={msg.id} className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2">
@@ -420,25 +596,29 @@ export function PayChat() {
               <Avatar name={ASSISTANT.name} src={ASSISTANT.avatar} size={26} ring />
               <span className="text-xs font-bold text-brand-700">{ASSISTANT.name}</span>
             </div>
-            <div className="bubble bubble-bot text-soft">{t("pay.thinking")}</div>
+            <div className="bubble bubble-bot text-soft">
+              {t(openClawMode ? "pay.agentThinking" : "pay.thinking")}
+            </div>
           </div>
         )}
       </div>
 
-      <div className="pay-composer">
-        <div className="mb-3 grid grid-cols-2 gap-2">
-          {quickReplies.map((q) => (
-            <button
-              key={q.label}
-              type="button"
-              className="chip chip-pay-quick min-w-0"
-              disabled={thinking}
-              onClick={() => void sendMessage(q.label)}
-            >
-              {q.label}
-            </button>
-          ))}
-        </div>
+      <div className="pay-composer shrink-0">
+        {!hasStarted && (
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            {quickReplies.map((q) => (
+              <button
+                key={q.label}
+                type="button"
+                className="chip chip-pay-quick min-w-0"
+                disabled={thinking}
+                onClick={() => void sendMessage(q.label)}
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
+        )}
         <form
           className="flex items-center gap-2 rounded-[var(--radius-pill)] border border-line bg-surface p-1.5 pl-4 shadow-[0_16px_30px_-16px_rgba(15,15,20,0.35)]"
           onSubmit={(e) => {
@@ -453,6 +633,17 @@ export function PayChat() {
             placeholder={t("pay.placeholder")}
             className="min-w-0 flex-1 bg-transparent text-[0.9rem] text-ink outline-none placeholder:text-soft"
           />
+          {contactPickerSupported && (
+            <button
+              type="button"
+              className="icon-btn shrink-0"
+              aria-label="Pick a contact"
+              onClick={() => void pickContact()}
+              disabled={thinking}
+            >
+              <ContactPickerIcon className="h-[1.15rem] w-[1.15rem]" />
+            </button>
+          )}
           <button
             type="button"
             className={`icon-btn shrink-0 ${listening ? "ring-2 ring-brand-500" : ""}`}

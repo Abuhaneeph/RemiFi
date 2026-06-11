@@ -4,12 +4,16 @@ import { createPortal } from "react-dom";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { lockBodyScroll } from "../lib/bodyScrollLock";
 
+export type MobileSheetSize = "default" | "scan" | "form" | "list";
+
 type MobileSheetProps = {
   open: boolean;
   onClose: () => void;
   title: string;
   subtitle?: string;
   stacked?: boolean;
+  size?: MobileSheetSize;
+  bodyClassName?: string;
   children: ReactNode;
 };
 
@@ -19,6 +23,8 @@ export function MobileSheet({
   title,
   subtitle,
   stacked = false,
+  size = "default",
+  bodyClassName,
   children,
 }: MobileSheetProps) {
   const titleId = useId();
@@ -42,6 +48,21 @@ export function MobileSheet({
 
   if (!open || typeof document === "undefined") return null;
 
+  const panelClass = [
+    "mobile-sheet-panel",
+    size !== "default" ? `mobile-sheet-panel-${size}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const bodyClass =
+    bodyClassName ??
+    (size === "form"
+      ? "sheet-form-body"
+      : size === "list"
+        ? "mobile-sheet-body-flush"
+        : "mobile-sheet-body");
+
   return createPortal(
     <div
       className={`mobile-sheet${stacked ? " mobile-sheet-stacked" : ""}`}
@@ -49,7 +70,7 @@ export function MobileSheet({
       onClick={onClose}
     >
       <div
-        className="mobile-sheet-panel"
+        className={panelClass}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -87,7 +108,7 @@ export function MobileSheet({
           </button>
         </div>
 
-        {children}
+        <div className={bodyClass}>{children}</div>
       </div>
     </div>,
     document.body
