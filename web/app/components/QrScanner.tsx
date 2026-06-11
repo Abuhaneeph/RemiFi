@@ -120,25 +120,22 @@ export function QrScanner({ onScan, onError, walletOnly = false }: QrScannerProp
   const supported = qrScannerSupported();
 
   return (
-    <div className="flex flex-col">
+    <div className="scan-stack">
       {supported ? (
         <>
-          <div className="scan-viewfinder relative overflow-hidden rounded-[var(--radius-lg)] bg-ink">
-            <video
-              ref={videoRef}
-              className="aspect-square w-full object-cover"
-              playsInline
-              muted
-            />
-            {!active && (
-              <div className="absolute inset-0 flex items-center justify-center bg-ink/60 p-4 text-center text-sm text-white">
+          <div className="scan-viewfinder">
+            <video ref={videoRef} playsInline muted />
+            {!active ? (
+              <div className="scan-viewfinder-idle">
                 Tap start to use your camera
               </div>
+            ) : (
+              <span className="scan-line" aria-hidden />
             )}
-            <span className="scan-corner scan-corner-tl pointer-events-none absolute left-4 top-4" />
-            <span className="scan-corner scan-corner-tr pointer-events-none absolute right-4 top-4" />
-            <span className="scan-corner scan-corner-bl pointer-events-none absolute bottom-4 left-4" />
-            <span className="scan-corner scan-corner-br pointer-events-none absolute bottom-4 right-4" />
+            <span className="scan-corner scan-corner-tl" aria-hidden />
+            <span className="scan-corner scan-corner-tr" aria-hidden />
+            <span className="scan-corner scan-corner-bl" aria-hidden />
+            <span className="scan-corner scan-corner-br" aria-hidden />
           </div>
           <button
             type="button"

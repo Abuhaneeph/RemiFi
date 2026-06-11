@@ -1,14 +1,28 @@
 /**
- * Generate favicon + app icons from public/remifi (2).png
+ * Generate favicon + app icons from public/logo.png
  *   npm run icons
  */
+import { access } from "node:fs/promises";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const src = path.join(root, "public", "remifi (2).png");
+const candidates = ["logo.png", "assets/remifi-agent.png"].map((file) =>
+  path.join(root, "public", file)
+);
+const src =
+  (await Promise.all(
+    candidates.map(async (file) => {
+      try {
+        await access(file);
+        return file;
+      } catch {
+        return null;
+      }
+    })
+  ).then((files) => files.find(Boolean))) ?? candidates[0];
 
 const outputs = [
   { file: "app/icon.png", size: 32 },

@@ -48,8 +48,6 @@ export function DepositContent() {
       </header>
 
       <div className="screen px-5 pb-8">
-        <p className="text-sm text-muted">{t("deposit.subtitle")}</p>
-
         {!isConnected || !address ? (
           <div className="mt-8">
             <ConnectWallet label={t("deposit.connectFirst")} />
@@ -57,12 +55,10 @@ export function DepositContent() {
         ) : (
           <>
             <section className="mt-6 rounded-[var(--radius-lg)] border border-line bg-surface p-5">
-              <p className="text-sm font-semibold text-ink">{t("deposit.fiatSection")}</p>
-              <p className="mt-1 text-sm text-muted">{t("deposit.fiatSectionHint")}</p>
               <MoonPayOnRamp />
             </section>
 
-            <p className="my-5 text-center text-xs font-semibold uppercase tracking-wide text-soft">
+            <p className="my-5 text-center text-xs text-soft">
               {t("deposit.orSendCrypto")}
             </p>
 
@@ -93,17 +89,6 @@ export function DepositContent() {
                 {copied ? t("deposit.copied") : t("deposit.copy")}
               </button>
             </section>
-
-            <section className="summary-card mt-6">
-              <p className="text-sm font-semibold text-ink">{t("deposit.howTitle")}</p>
-              <ol className="mt-2 list-decimal space-y-1 pl-4 text-sm text-muted">
-                <li>{t("deposit.step1")}</li>
-                <li>{t("deposit.step2")}</li>
-                <li>{t("deposit.step3")}</li>
-              </ol>
-            </section>
-
-            <p className="mt-4 text-xs text-soft">{t("deposit.stablecoins")}</p>
           </>
         )}
       </div>

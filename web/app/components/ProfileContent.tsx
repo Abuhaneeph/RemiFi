@@ -6,6 +6,7 @@ import { PROFILE } from "../data/people";
 import { useLanguage } from "../context/LanguageContext";
 import { Avatar } from "./Avatar";
 import { LanguageSelector } from "./LanguageSelector";
+import { LogoutButton } from "./LogoutButton";
 import { ProfileSettings } from "./ProfileSettings";
 import { ChevronLeftIcon } from "./icons";
 
@@ -53,6 +54,7 @@ export function ProfileContent() {
         <WalletAssets />
 
         <ProfileSettings />
+        <LogoutButton />
 
         <Link href="/people" className="btn btn-gradient btn-block mt-8">
           {t("profile.manageContacts")}

@@ -154,6 +154,7 @@ export function ProfileSettings() {
         title={t("profile.selectCorridor")}
         subtitle={t("profile.selectCorridorHint")}
         stacked
+        size="list"
       >
         <div className="sheet-list">
           <div className="sheet-options">

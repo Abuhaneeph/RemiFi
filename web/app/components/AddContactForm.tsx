@@ -1,13 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { getCountryLabel, phonePlaceholder } from "../data/countries";
+import { useState } from "react";
+import { phonePlaceholder } from "../data/countries";
 import { useContacts } from "../context/ContactsContext";
 import { useLanguage } from "../context/LanguageContext";
 import { canPickPhoneContacts, pickPhoneContact } from "../lib/phone-contacts";
-import { ConfirmationModal } from "./ConfirmationModal";
 import { CountryPickerField } from "./CountryPickerSheet";
-import { Avatar } from "./Avatar";
 import { MobileSheet } from "./MobileSheet";
 import { QrScanner } from "./QrScanner";
 
@@ -24,36 +22,13 @@ export function AddContactForm({ onSaved }: AddContactFormProps) {
   const [phone, setPhone] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
   const [favourite, setFavourite] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmPhase, setConfirmPhase] = useState<"confirm" | "success">("confirm");
   const [picking, setPicking] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const phonePickerAvailable = canPickPhoneContacts();
 
-  const previewName = name.trim() || t("contact.contact");
-  const countryLabel = getCountryLabel(country);
-
-  const modalDetails = useMemo(
-    () => [
-      { label: "Name", value: name.trim() },
-      { label: "Country", value: countryLabel },
-      ...(phone.trim() ? [{ label: "Phone", value: phone.trim() }] : []),
-      ...(walletAddress.trim()
-        ? [{ label: "Wallet", value: `${walletAddress.trim().slice(0, 8)}…` }]
-        : []),
-      { label: "Favourite", value: favourite ? "Yes" : "No" },
-    ],
-    [countryLabel, favourite, name, phone]
-  );
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    setConfirmPhase("confirm");
-    setConfirmOpen(true);
-  };
-
-  const handleConfirm = () => {
     addPerson({
       name: name.trim(),
       country,
@@ -61,7 +36,7 @@ export function AddContactForm({ onSaved }: AddContactFormProps) {
       walletAddress: walletAddress.trim() || undefined,
       favourite,
     });
-    setConfirmPhase("success");
+    onSaved();
   };
 
   const handlePickFromPhone = async () => {
@@ -76,26 +51,12 @@ export function AddContactForm({ onSaved }: AddContactFormProps) {
     }
   };
 
-  const handleCloseConfirm = () => {
-    const wasSuccess = confirmPhase === "success";
-    setConfirmOpen(false);
-    setConfirmPhase("confirm");
-    if (wasSuccess) {
-      onSaved();
-    }
-  };
-
   return (
     <>
       <form onSubmit={handleSubmit} className="flex flex-col">
-        <div className="flex flex-col items-center pt-1">
-          <Avatar name={previewName} ring size={72} />
-          <p className="mt-3 text-sm text-muted">{t("contact.appearsHome")}</p>
-        </div>
-
-        <section className="mt-6">
+        <section>
           <label htmlFor="add-contact-name" className="form-label">
-            {t("contact.fullName")}
+            {t("contact.name")}
           </label>
           <input
             id="add-contact-name"
@@ -109,19 +70,22 @@ export function AddContactForm({ onSaved }: AddContactFormProps) {
           />
         </section>
 
-        <section className="mt-5">
-          <CountryPickerField value={country} onChange={setCountry} />
+        <section className="mt-4">
+          <CountryPickerField
+            value={country}
+            onChange={setCountry}
+            label={t("contact.country")}
+          />
         </section>
 
-        <section className="mt-5">
+        <section className="mt-4">
           <div className="flex items-center justify-between gap-2">
             <label htmlFor="add-contact-wallet" className="form-label">
-              {t("contact.wallet")}{" "}
-              <span className="font-normal text-soft">{t("contact.walletOptional")}</span>
+              {t("contact.wallet")}
             </label>
             <button
               type="button"
-              className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+              className="text-xs font-semibold text-brand-700"
               onClick={() => setScanOpen(true)}
             >
               {t("contact.scanQr")}
@@ -139,20 +103,19 @@ export function AddContactForm({ onSaved }: AddContactFormProps) {
           />
         </section>
 
-        <section className="mt-5">
+        <section className="mt-4">
           <div className="flex items-center justify-between gap-2">
             <label htmlFor="add-contact-phone" className="form-label">
-              {t("contact.phone")}{" "}
-              <span className="font-normal text-soft">{t("contact.walletOptional")}</span>
+              {t("contact.phone")}
             </label>
             {phonePickerAvailable ? (
               <button
                 type="button"
-                className="text-xs font-semibold text-brand-700 underline underline-offset-2"
+                className="text-xs font-semibold text-brand-700"
                 onClick={() => void handlePickFromPhone()}
                 disabled={picking}
               >
-                {picking ? t("people.opening") : t("people.fromPhone")}
+                {picking ? "…" : t("people.fromPhone")}
               </button>
             ) : null}
           </div>
@@ -165,14 +128,9 @@ export function AddContactForm({ onSaved }: AddContactFormProps) {
             className="form-field mt-2 w-full"
             autoComplete="tel"
           />
-          {!phonePickerAvailable ? (
-            <p className="mt-1.5 text-xs text-soft">
-              {t("people.phoneHint")}
-            </p>
-          ) : null}
         </section>
 
-        <label className="method-row mt-5 cursor-pointer">
+        <label className="method-row mt-4 cursor-pointer">
           <input
             type="checkbox"
             checked={favourite}
@@ -184,28 +142,20 @@ export function AddContactForm({ onSaved }: AddContactFormProps) {
 
         <button
           type="submit"
-          className="btn btn-gradient btn-block mt-6"
+          className="btn btn-gradient btn-block mt-5"
           disabled={!name.trim()}
         >
           {t("contact.save")}
         </button>
       </form>
 
-      <ConfirmationModal
-        open={confirmOpen}
-        variant="save"
-        phase={confirmPhase}
-        recipientName={name.trim()}
-        details={modalDetails}
-        onConfirm={handleConfirm}
-        onClose={handleCloseConfirm}
-      />
-
       <MobileSheet
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title={t("contact.scanQr")}
-        subtitle={t("contact.scanQrHint")}
+        stacked
+        size="scan"
+        bodyClassName="scan-sheet-body"
       >
         <QrScanner
           walletOnly

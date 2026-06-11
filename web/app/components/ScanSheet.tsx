@@ -33,6 +33,8 @@ export function ScanSheet({ open, onClose }: ScanSheetProps) {
       title={t("scan.title")}
       subtitle={t("scan.subtitle")}
       stacked
+      size="scan"
+      bodyClassName="scan-sheet-body"
     >
       <QrScanner
         walletOnly={false}

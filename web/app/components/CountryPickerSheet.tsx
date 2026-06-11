@@ -101,7 +101,7 @@ export function CountryPickerSheet({
         onClick={onClose}
       >
         <div
-          className="mobile-sheet-panel"
+          className="mobile-sheet-panel mobile-sheet-panel-list"
           role="dialog"
           aria-modal="true"
           aria-labelledby={titleId}
@@ -206,9 +206,8 @@ export function CountryPickerField({
         <span className="picker-field-flag" aria-hidden>
           {countryFlag(value)}
         </span>
-        <span className="min-w-0 flex-1 text-left">
-          <span className="block truncate font-semibold text-ink">{selectedLabel}</span>
-          <span className="text-xs font-medium text-soft">{value}</span>
+        <span className="min-w-0 flex-1 truncate text-left font-semibold text-ink">
+          {selectedLabel}
         </span>
         <ChevronDownIcon className="h-5 w-5 shrink-0 text-soft" />
       </button>

@@ -26,6 +26,7 @@ export function CurrencyPickerSheet({ open, onClose }: CurrencyPickerSheetProps)
       title="Display currency"
       subtitle="Choose how your balance is shown"
       stacked
+      size="list"
     >
       <div className="sheet-list">
         <div className="sheet-options">

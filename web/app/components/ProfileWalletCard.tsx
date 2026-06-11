@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { ConnectWallet } from "./ConnectWallet";
-import { DisconnectWallet } from "./DisconnectWallet";
 import { useWallet, shortAddress } from "../context/WalletContext";
 
 export function ProfileWalletCard() {
@@ -58,9 +57,6 @@ export function ProfileWalletCard() {
             {copied ? "Copied" : "Copy"}
           </span>
         </button>
-        <div className="mt-3">
-          <DisconnectWallet />
-        </div>
       </div>
     </section>
   );
