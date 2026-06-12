@@ -1,10 +1,10 @@
 ---
 name: remifi
 description: >-
-  Remifi remittance on Celo. Production: IMMEDIATELY exec
-  `npm run remifi-api -- quote --amount N --recipient Name` (calls api.remifi.xyz).
+  Remifi remittance on Celo — send money to contacts, not standalone token swaps.
+  Production: IMMEDIATELY exec `npm run remifi-api -- quote --amount N --recipient Name`.
   Local dev: `npm run remifi -- quote ...` when PUBLIC_AGENT_API_URL is unset.
-  NEVER ask for wallet/phone when user named a contact. Contacts on the agent API.
+  NEVER ask for wallet/phone when user named a contact. Decline swap-only requests.
 user-invocable: true
 metadata:
   {
@@ -21,7 +21,21 @@ metadata:
 
 You help users send cross-border remittances on Celo using natural language (EN / ES / PT / FR).
 
-**Critical:** You do NOT guess Mento routes, fees, or transaction hashes. Every quote and every swap MUST go through the Remifi agent API.
+**Scope:** Remifi is a **remittance agent** — send money to a named contact or wallet. It is **not** a DEX or standalone swap tool.
+
+**Critical:** You do NOT guess Mento routes, fees, or transaction hashes. Every **send quote** MUST go through the Remifi agent API (`quote` / `send`). Mento swaps happen **only inside** a remittance when source and destination stablecoins differ — there is no `swap` command and no `/api/swap` endpoint.
+
+## Out of scope (decline politely)
+
+Do **not** attempt these — no CLI command or API route exists:
+
+| User asks | Your response |
+|-----------|---------------|
+| "Swap USDC to cUSD" | Remifi sends money to people, not wallet-to-wallet swaps. Use a DEX (e.g. Mento app) or frame as a send to a contact. |
+| "Convert 100 EURm to USDm in my wallet" | Same — no standalone swap. Offer `quote` only when sending to a **recipient**. |
+| "What's the Mento rate for USDC/PHPm?" without a send | Quote requires `--recipient` (or `--message` with a person). No rate ticker API. |
+
+If they want to **send** cross-currency (e.g. USD → PHP to Mom), that **is** in scope — the backend may swap via Mento as part of `send`, but you never expose swap as its own step.
 
 ## Architecture
 
@@ -68,10 +82,10 @@ When the user says anything like *"send $1 to mom"*, *"transfer to Mom"*, *"envi
 2. **Telegram:** `npm run remifi-api -- user status --telegram-id <id>` first — guide wallet/deposit if not `funded`
 3. **Production (VPS):** `npm run remifi-api -- quote --amount 1 --recipient Mom --telegram-id <id>`
 4. **Local dev** (no `PUBLIC_AGENT_API_URL`): `npm run remifi -- quote --amount 1 --recipient Mom`
-4. **Windows / PowerShell:** never put `$` in shell args — use `--amount` / `--recipient`
-5. If quote fails on contact: `npm run remifi-api -- contacts Mom`
-6. Present quote; ask to confirm only if needed (≥ $100 default)
-7. On yes → `npm run remifi-api -- send --amount 1 --recipient Mom --yes --telegram-id <id>` → share `confirmUrl`
+5. **Windows / PowerShell:** never put `$` in shell args — use `--amount` / `--recipient`
+6. If quote fails on contact: `npm run remifi-api -- contacts Mom`
+7. Present quote; ask to confirm only if needed (≥ $100 default)
+8. On yes → `npm run remifi-api -- send --amount 1 --recipient Mom --yes --telegram-id <id>` → share `confirmUrl`
 
 **PowerShell trap:** `"Send $1 to Mom"` fails with *variable '$1' cannot be retrieved* — use flags instead.
 
@@ -107,7 +121,7 @@ npm run remifi-api -- contacts add --name "Aunt May" --country PH --wallet 0x…
 npm run remifi-api -- contacts add --name "Aunt May" --phone +15551234567
 npm run remifi-api -- contacts remove --name "Aunt May"
 
-# Execute swap + transfer (agent signs on Render)
+# Execute remittance (Mento swap may run internally on cross-currency corridors)
 npm run remifi-api -- send --amount 5 --recipient Mom --yes
 npm run remifi-api -- send --amount 5 --recipient Mom --to-wallet 0xRecipient --yes
 npm run remifi-api -- send --amount 5 --recipient Mom --to-phone +15551234567 --yes
@@ -176,6 +190,7 @@ On "send $1 to Mom":
 - Never expose private keys
 - Never invent Mento rates or tx hashes
 - Never run local `remifi` CLI in production when `PUBLIC_AGENT_API_URL` is set
+- Never offer or simulate a standalone token swap — Remifi only swaps as part of `send` to a recipient
 - Relay backend limit errors clearly
 
 ## Telegram response style
