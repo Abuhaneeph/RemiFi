@@ -67,14 +67,36 @@ The VPS is a **chat gateway**. It does not sign transactions.
 
 **Do not set on VPS:** `AGENT_PRIVATE_KEY`, `CELO_RPC_URL`, `DATA_DIR`, Twilio (agent handles notifications on Render).
 
-3. Run:
+3. **Critical:** OpenClaw must use the repo config and workspace (not `~/.openclaw/workspace`).
+
+Add to `.env` (see `.env.vps.example`):
 
 ```bash
-openclaw onboard   # first time
+OPENCLAW_CONFIG_PATH=/var/projects/RemiFi/openclaw.json
+```
+
+Without this, Telegram routes to the default `main` agent and never loads `AGENTS.md`, `SOUL.md`, or the `remifi` skill from the git checkout.
+
+4. Run:
+
+```bash
+openclaw onboard   # first time only (channels + env refs)
+openclaw config file   # must print .../RemiFi/openclaw.json
+openclaw config get agents.list   # must show id "remifi", default true
+openclaw doctor
 openclaw gateway run
 ```
 
-4. Keep alive with systemd — see example in `.env.vps.example` comments.
+5. Keep alive with systemd — see example in `.env.vps.example` comments.
+
+### VPS troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Bot ignores remittance rules / asks for wallet | Workspace is `~/.openclaw/workspace` | Set `OPENCLAW_CONFIG_PATH` to repo `openclaw.json`, restart |
+| `openclaw config file` → `~/.openclaw/openclaw.json` | Gateway not using repo config | Add `OPENCLAW_CONFIG_PATH` to `.env` + systemd `EnvironmentFile` |
+| Doctor shows agent `main` on telegram | Stale onboard config | Same as above; `agents.list` should be `remifi` |
+| `git pull` blocked by `package-lock.json` | Local npm install on VPS | `git stash` then `git pull` (as you did) |
 
 ### How VPS talks to the agent
 
