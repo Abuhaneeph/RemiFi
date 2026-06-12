@@ -1,4 +1,11 @@
 {
+  "gateway": {
+    "http": {
+      "endpoints": {
+        "chatCompletions": { "enabled": true }
+      }
+    }
+  },
   "models": {
     "mode": "merge",
     "providers": {
