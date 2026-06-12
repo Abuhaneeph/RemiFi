@@ -1,7 +1,7 @@
 {
   "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
   "name": "Remifi",
-  "description": "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds. remifi.xyz · api.remifi.xyz · Telegram @remifi_bot",
+  "description": "Send cross border remittances on Celo using stablecoins. Talk in English, Spanish, Portuguese, or French. Remifi quotes Mento routes, compares fees against banks, and settles on chain in seconds.",
   "tags": [
     "multilingual",
     "remittance",
