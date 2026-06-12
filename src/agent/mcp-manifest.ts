@@ -254,6 +254,11 @@ export function buildApiIndex(config: Config, walletAddress?: string | null) {
     endpoints: {
       health: `${api}/api/health`,
       agent: `${api}/api/agent`,
+      userStatus: `${api}/api/user/status`,
+      userLink: `${api}/api/user/link`,
+      intent: `${api}/api/intent`,
+      transferPrepare: `${api}/api/transfer/prepare`,
+      transferConfirm: `${api}/api/transfer/confirm`,
       agentCard: `${api}/.well-known/agent.json`,
       a2aCard: `${api}/.well-known/agent-card.json`,
       mcp: mcpDiscoveryUrl(config),

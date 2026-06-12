@@ -1,14 +1,14 @@
 import { Suspense } from "react";
-import { ResponsiveShell } from "../../components/ResponsiveShell";
-import { AuthFlow } from "../../components/AuthFlow";
+import { ResponsiveShell } from "../../../components/ResponsiveShell";
+import { PayConfirmFlow } from "../../../components/PayConfirmFlow";
 
 export const dynamic = "force-dynamic";
 
-export default function AuthScreen() {
+export default function PayConfirmPage() {
   return (
     <ResponsiveShell desktopMode="centered" bareMobile>
       <Suspense fallback={null}>
-        <AuthFlow />
+        <PayConfirmFlow />
       </Suspense>
     </ResponsiveShell>
   );

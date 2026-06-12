@@ -15,6 +15,7 @@ import { BoltIcon, ChevronLeftIcon, ContactPickerIcon, MicIcon } from "./icons";
 import { useAgentApi } from "../context/AgentApiContext";
 import { useContacts } from "../context/ContactsContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useWallet } from "../context/WalletContext";
 import {
   contactTransferContext,
   extractRecipientName,
@@ -27,12 +28,15 @@ import {
   isOpenClawReachable,
   toAgentHistory,
 } from "../lib/pay-agent";
+import { useActiveAccount } from "thirdweb/react";
 import {
   executeTransfer,
+  executeUserTransfer,
   fetchQuote,
   type QuoteResponse,
   type TransferContext,
 } from "../lib/api";
+import { signPreparedTransfer } from "../lib/transfer-sign";
 import { checkRateAlerts } from "../lib/rate-alerts";
 import { listenForSpeech, speechLocale, speechRecognitionSupported } from "../lib/speech";
 import { FxRateBanner } from "./FxRateBanner";
@@ -102,6 +106,8 @@ export function PayChat() {
   const { allPeople } = useContacts();
   const { refreshBalancesAfterSend } = useAgentApi();
   const { t, locale } = useLanguage();
+  const { address } = useWallet();
+  const account = useActiveAccount();
 
   const sessionId = useRef("");
   useEffect(() => {
@@ -255,6 +261,7 @@ export function PayChat() {
     const ctx = {
       ...contactTransferContext(activeContact),
       ...extraCtx,
+      ...(address ? { senderWallet: address } : {}),
     };
     const apiMessage = normalizePayMessage(trimmed, activeContact);
     const quote = await fetchQuote(apiMessage, ctx);
@@ -373,7 +380,15 @@ export function PayChat() {
       confirm.quote.intent.recipientName ?? "your recipient";
 
     try {
-      const result = await executeTransfer(confirm.message, confirm.ctx);
+      const result =
+        address && account
+          ? await executeUserTransfer(
+              confirm.message,
+              address,
+              (prepared) => signPreparedTransfer(account, prepared),
+              { ...confirm.ctx, senderWallet: address }
+            )
+          : await executeTransfer(confirm.message, confirm.ctx);
       const sentTotal =
         confirm.quote.intent.amount + (confirm.quote.mentoFeeUsd ?? 0);
       await refreshBalancesAfterSend(sentTotal);

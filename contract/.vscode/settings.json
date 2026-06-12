@@ -1,8 +1,8 @@
 {
   "solidity.remappings": [
-    "forge-std/=lib/forge-std/src/",
-    "src/=src/",
-    "test/=test/"
+    "forge-std/=contract/lib/forge-std/src/",
+    "src/=contract/src/",
+    "test/=contract/test/"
   ],
   "solidity.compileUsingRemoteVersion": "v0.8.24"
 }

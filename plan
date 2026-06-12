@@ -1,0 +1,431 @@
+# Remifi — User-Owned Wallets & Phone-First Claim Flow
+
+## Problem today
+
+All sends are signed by the **agent wallet** (`AGENT_PRIVATE_KEY` on Render). Whether the user talks to Remifi on Telegram, WhatsApp, or the web app, funds leave **one shared operator account**. That is fine for a hackathon demo, but it is not production:
+
+- Users are not sending from **their** balance.
+- Contacts, history, and limits are **global** (one `contacts.json` on `/data`), not per person.
+- Recipients without a saved wallet can only receive if we already have their phone and escrow is deployed — but the sender still pays from the agent wallet.
+
+## Goal
+
+Move to a **non-custodial, per-user** model:
+
+1. **Sender** connects their own wallet (Thirdweb in-app / social login on web; same identity on Telegram).
+2. **Agent** still does intent, quotes, contact lookup, and orchestration — but **does not hold user funds** for sends.
+3. **Recipient without wallet** → escrow + claim link; they create a Thirdweb wallet on web and claim when their phone matches.
+4. **Web ↔ Telegram** — one tap from the web app opens the Telegram bot so users can chat with the same agent.
+5. **Telegram-first users** — if someone finds the bot before they have a Remifi account, the bot guides them: create wallet → deposit → send (no dead ends).
+
+---
+
+## Architecture (target)
+
+```
+                    ┌─────────────────────────────────────────┐
+                    │         api.remifi.xyz (agent)          │
+                    │  intent · quotes · contacts · history   │
+                    │  NO user private keys · NO user signing │
+                    └───────────────┬─────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        │                           │                           │
+   remifi.xyz                   Telegram                    WhatsApp
+   Thirdweb wallet              senderPhone                 senderPhone
+   user signs txs               links to same userId        links to same userId
+        │                           │                           │
+        └───────────────────────────┴───────────────────────────┘
+                                    │
+                              Celo + RemifiVault
+                         (user wallet → vault → recipient wallet)
+```
+
+| Layer | Role |
+|-------|------|
+| **Thirdweb (web)** | User auth (phone / email / social), embedded wallet, sign swap + transfer or vault deposit |
+| **Agent API** | Parse intent, resolve contacts, Mento quotes, build unsigned tx payload or escrow params, store per-user data |
+| **RemifiVault** | Lock funds for phone-only recipients; claim with secret link + recipient wallet |
+| **Twilio** | SMS/WhatsApp claim link to recipient (optional; link can also be shared by sender) |
+| **Telegram bot** | Thin client; passes `senderPhone` / `telegramUserId` so agent uses **that user's** contacts and wallet |
+
+---
+
+## User identity & data scoping
+
+Today everything lives in a single `data/` store. We need a stable **user id** across channels:
+
+| Channel | Identity source |
+|---------|-----------------|
+| Web | Thirdweb wallet address and/or verified phone from in-app wallet |
+| Telegram | `telegramUserId` + optional linked phone |
+| WhatsApp | E.164 sender phone |
+
+**Linking:** A user who starts on web and later uses Telegram should map to one `userId` (e.g. phone verification or “link Telegram” in profile). Store:
+
+- `users/{userId}/contacts.json`
+- `users/{userId}/history.json`
+- `users/{userId}/preferences.json` (limits, default corridor, language)
+
+Agent API requests include `x-user-id` or signed session JWT from web; Telegram/WhatsApp pass `senderPhone` / `telegramUserId` in `TransferContext` (already partially supported via `senderPhone`).
+
+---
+
+## Telegram-first onboarding (no account yet)
+
+Many users will discover Remifi **in Telegram first** — they do not have a Thirdweb wallet, zero balance, and no linked `userId`. The bot must **guide them end-to-end**, not error out or ask for a wallet address.
+
+### Principle
+
+| Bot can do in chat | Bot cannot do in chat |
+|--------------------|------------------------|
+| Welcome, explain, quote (even at $0 balance) | Create wallet, hold keys, sign txs, take card payment |
+| Detect onboarding state via agent API | — |
+| Send **deep links** with inline buttons | — |
+| Resume conversation after user completes a web step | — |
+
+Wallet creation, deposit, and signing always happen on **remifi.xyz** (Thirdweb + MoonPay). Telegram is the **coach**; web is the **wallet**.
+
+### Onboarding states (agent API)
+
+`GET /api/user/status?telegramUserId=…` returns:
+
+| State | Meaning | Bot behavior |
+|-------|---------|--------------|
+| `unknown` | First message, never linked | Welcome + **Create wallet** link |
+| `wallet_pending` | Opened auth link, not finished Thirdweb login | Nudge: *"Tap the link to finish setup (~30 sec)"* |
+| `wallet_ready` | Linked wallet, balance = 0 | **Deposit** link + explain min amount for corridor |
+| `funded` | Balance ≥ send minimum | Normal quote / send flows |
+| `send_pending` | Quote approved, awaiting web confirm | Resend confirm link or show status |
+
+Store `telegramUserId` → `walletAddress` mapping when user completes `/auth?tg=…`.
+
+### Step-by-step: new user in Telegram
+
+```
+User opens @RemifiBot
+Bot:  "Hey — I'm Remifi 🦞. Send money abroad like a text message.
+       First, let's set up your wallet (free, ~30 seconds)."
+       [ Create my wallet ]  →  remifi.xyz/auth?tg=<telegramUserId>
+
+User taps link (mobile browser or Telegram in-app browser)
+Web:  Thirdweb in-app login (phone / Google / Apple)
+Web:  Smart wallet created → auto-link tg id → redirect /home?tg=linked
+
+User back in Telegram (or bot pushes update when link completes)
+Bot:  "Wallet ready ✓ Address 0x1234…5678
+       Add funds to start sending."
+       [ Deposit USDC ]  →  remifi.xyz/deposit?tg=<telegramUserId>
+       (MoonPay card / bank, or copy address QR — already in DepositContent)
+
+User deposits
+Bot:  (poll balance or webhook) "You're funded — $50 USDC ready."
+       "Who do you want to send to? Try: Send $10 to Mom"
+
+User: "Send $10 to Mom"
+Bot:  quote → "Confirm?"
+User: "yes"
+Bot:  [ Confirm send ]  →  remifi.xyz/pay/confirm?t=<token>
+User: one tap on web → tx confirmed
+Bot:  "Sent ✓ · Mom gets ~₱… · tx 0x…"
+```
+
+### Bot rules for unlinked / unfunded users
+
+1. **Never** ask for a private key or MetaMask on Telegram.
+2. **Never** block quotes at $0 balance — show quote + *"Deposit first to send"* with deposit link.
+3. On send attempt while unfunded: quote anyway, then single CTA — deposit OR confirm (if balance sufficient after refresh).
+4. On `/start`: if `unknown` → onboarding welcome; if `funded` → *"What would you like to send?"*
+5. Optional: Telegram **inline keyboard** + **Web App** button that opens `remifi.xyz` inside Telegram (keeps user in-app).
+
+### Deep links (Telegram → web)
+
+| Link | Purpose |
+|------|---------|
+| `remifi.xyz/auth?tg={telegramUserId}` | Create Thirdweb wallet + link account |
+| `remifi.xyz/deposit?tg={telegramUserId}` | MoonPay on-ramp / QR (`DepositContent`, `MoonPayOnRamp`) |
+| `remifi.xyz/people?tg={telegramUserId}` | Add Mom / import phone contacts |
+| `remifi.xyz/pay/confirm?t={quoteToken}` | Sign after user says yes in chat |
+| `remifi.xyz/claim?c=…&s=…` | Recipient claims escrow (separate flow) |
+
+After each web step, show a **Return to Telegram** hint; bot can also send a proactive message when `POST /api/user/link` or balance webhook fires.
+
+### Skill / bot updates (`skills/remifi/SKILL.md`)
+
+Add onboarding commands:
+
+```bash
+# Check if Telegram user has wallet + balance
+npm run remifi-api -- user status --telegram-id <id>
+
+# After user creates wallet on web, bot can refresh
+npm run remifi-api -- balance --telegram-id <id>
+```
+
+When `user status` is `unknown` or `wallet_ready` with zero balance, **do not** call `send --yes`. Guide with links instead.
+
+### Web → Telegram (return path)
+
+After auth/deposit on web, show:
+
+- *"You're set up. Continue in Telegram"* → `https://t.me/{BOT_USERNAME}?start=back_{telegramUserId}`
+
+Bot recognizes `back_` and resumes: *"Ready when you are — who should we send to?"*
+
+---
+
+## Send flows
+
+### A. Recipient **has** wallet on contact
+
+1. User: *“Send $20 to Kofi”* (Telegram or web).
+2. Agent: `findContactByName("Kofi")` → `walletAddress` + optional `phone`.
+3. Agent: quote via Mento.
+4. **Web:** Thirdweb wallet signs `executeRemittance` (swap if needed + `transfer` to `walletAddress`).
+5. **Telegram:** User gets quote in chat → confirm → deep link to web **confirm screen** with pre-filled intent. If user is not onboarded yet, bot runs **Telegram-first onboarding** above before quoting send.
+
+### B. Recipient **has phone only** (no wallet) — primary new flow
+
+1. User: *“Send $20 to Kofi”*.
+2. Agent: `findContactByName("Kofi")` → `phone` but no `walletAddress`.
+3. Agent: `deliveryMethod = escrow` (already in `deliveryHint` when `recipientPhone` + vault configured).
+4. **Sender signs** deposit to `RemifiVault` (not agent wallet):
+   - Mento swap in sender’s wallet to destination token (or source token if same).
+   - `RemifiVault.deposit(claimId, token, amount, phoneHash)`.
+5. Agent builds claim URL: `https://remifi.xyz/claim?c={claimId}&s={secret}` (`buildClaimUrl` exists).
+6. Notify recipient via Twilio SMS/WhatsApp **or** sender shares link in chat.
+7. Recipient opens link → **ClaimFlow** (already built):
+   - Connect / create wallet via Thirdweb (`ConnectWallet`).
+   - Verify phone matches escrow `phoneHash` (see gap below).
+   - `claim(claimId, secret, recipientWallet)` — user signs.
+
+### C. Recipient not in contacts but name + phone known
+
+- On send, if contact has name only, prompt once: *“What’s Kofi’s phone number?”* or use imported phone book (`importPhoneContacts`).
+- Save `phone` on contact; route to flow B.
+
+---
+
+## Phone verification on claim (gap to close)
+
+**Vault today:** `phoneHash` is set at deposit; claim only checks `secret` from the link, not that the claimant’s phone matches.
+
+**Target:**
+
+1. On claim page, after Thirdweb connect, require **phone OTP** (Thirdweb in-app wallet phone auth or Twilio Verify).
+2. Hash normalized E.164 → compare to escrow `phoneHash` before enabling **Claim** button.
+3. Optional: store `recipientPhone` on contact after successful claim + wallet address for future direct sends.
+
+This prevents anyone with the link from claiming to their wallet unless they control the recipient phone.
+
+---
+
+## One-tap approve on web (no MetaMask popups)
+
+**Yes — this is the default UX we want.** The agent never needs the user's private key.
+
+### What the user sees
+
+1. User is already logged in (email / Google / Apple / passkey — one-time, not per send).
+2. User types *"Send $20 to Kofi"* → agent returns quote → UI shows confirm card (already in `PayChat`).
+3. User taps **Confirm send** → spinner → done. No extension popup, no "Sign transaction" modal from MetaMask.
+
+That is it. Approval is **in-app UI only**.
+
+### How it works under the hood (prepare → sign in browser)
+
+```
+User taps Confirm          Agent API                    Browser (Thirdweb)
+      │                         │                              │
+      ├─ POST /transfer/prepare ┤                              │
+      │   (quote id, wallet)    │                              │
+      │                         ├─ build tx calldata           │
+      │                         │  (Mento swap + transfer      │
+      │                         │   or vault deposit)          │
+      │◄── unsigned txs ────────┤                              │
+      │                         │                              │
+      ├─ sendTransaction ───────┼──────────────────────────────►│
+      │   (silent, in-app)      │                              │ signs with
+      │                         │                              │ embedded session
+      │◄── txHash ──────────────┼──────────────────────────────┤
+      ├─ POST /transfer/confirm ┤                              │
+      │   (txHash, receiptId)   ├─ save history                │
+```
+
+- **Agent** = brain. Parses intent, resolves Kofi, fetches Mento quote, returns **unsigned** transaction data. It reads the user's **public** wallet address for balance checks. It never receives or stores a private key.
+- **Browser** = signer. Thirdweb in-app wallet holds the signing session locally (MPC / embedded wallet). `sendTransaction` runs in the background after UI confirm.
+- **Smart account + sponsored gas** (already in `web/app/lib/thirdweb-wallets.ts`): `smartAccount: { sponsorGas: true }` so users do not need CELO for gas on first send.
+
+### No MetaMask in the main path
+
+| Wallet type | Confirm UX |
+|-------------|------------|
+| **Thirdweb in-app** (default) | One tap in Remifi UI — silent sign |
+| MetaMask / Valora / WalletConnect | Extension/app popup every time — **advanced option only** |
+
+**Product rule:** Onboarding and AI Pay use **in-app wallet only**. Hide or bury external wallets under "Use existing wallet" so 95% of users never see a popup.
+
+### Does the agent ever access user funds or private keys?
+
+**No. Never.**
+
+| ❌ Do not do | ✅ Do instead |
+|-------------|---------------|
+| Send `AGENT_PRIVATE_KEY` or user keys to the server | Agent returns calldata; browser signs |
+| Custodial wallet where Remifi holds user seeds | Thirdweb embedded wallet (user owns account) |
+| Agent calls `writeContract` with user funds | User's smart account submits the tx |
+
+The agent "accesses" user funds only in the sense that it knows the user's **public address** and can **read** on-chain balance via RPC — same as any block explorer. Spending requires a signature that only happens in the browser (or, optionally later, a user-granted session key — see below).
+
+### Telegram / WhatsApp: same rule
+
+Chat channels cannot sign. Flow:
+
+1. Bot quotes in chat.
+2. User says *yes* → bot sends **one link**: `remifi.xyz/pay/confirm?…` (quote token, 5 min TTL).
+3. User opens link (already logged into Thirdweb on phone) → **Confirm send** → silent sign → bot gets webhook / poll and replies with tx hash.
+
+No private key on VPS. No agent signing on user's behalf unless user explicitly opts into delegation (next section).
+
+### Optional later: session keys for power users
+
+For users who want *"confirm in Telegram without opening the link every time"*:
+
+- User enables **auto-send up to $X/day** in profile.
+- Thirdweb smart account grants a **scoped session key** (contract + amount limit + expiry).
+- Agent submits via bundler **only within that scope** — still not full private key export.
+
+Default remains: every send = one UI tap on web (or one confirm link from Telegram).
+
+---
+
+## Thirdweb responsibilities
+
+| Feature | Use |
+|---------|-----|
+| In-app wallet (phone / email / social / passkey) | Default login; silent signing after UI confirm |
+| Smart account + `sponsorGas: true` | No CELO required for gas; no gas popups |
+| `sendTransaction` in browser | User-signed Mento swap + transfer or vault deposit |
+| Phone auth | Claim-page verification against `phoneHash` |
+| Session keys (optional Phase 3) | Limited Telegram automation without full key custody |
+
+**Env:** `NEXT_PUBLIC_THIRDWEB_CLIENT_ID` (web). Agent never sees user private keys.
+
+**API change:** `POST /api/transfer/prepare` returns unsigned tx calldata + Mento route; web signs via Thirdweb and calls `POST /api/transfer/confirm` with `txHash`. Replace today's `POST /api/transfer` (agent signs everything).
+
+---
+
+## Contact resolution (agent behavior)
+
+Already implemented in `resolveContactContext` / `findContactByName`. Extend rules:
+
+| Contact fields | Delivery |
+|----------------|----------|
+| `walletAddress` | Direct wallet transfer (user-signed) |
+| `phone` only | Escrow + claim link |
+| Name only | Ask for phone or pick from phone import |
+| No match | Ask clarifying question once; do not ask for wallet if phone path is available |
+
+**Telegram rule (keep):** If user says *“send $1 to Mom”* and Mom is in **their** contact list with a phone, do not ask for wallet — quote and proceed to escrow or wallet path automatically.
+
+---
+
+## Web → Telegram bridge
+
+Add a persistent entry point on web (home, profile, AI Pay):
+
+- Button: **“Chat with Remifi on Telegram”**
+- Link: `https://t.me/{BOT_USERNAME}?start={optional_ref}`  
+  - `start` payload can encode `userId` or referral token for account linking after OAuth-style verify on web.
+
+Optional: Telegram **Web App** button inside bot that opens `remifi.xyz` with session token for wallet actions.
+
+---
+
+## Signing model migration
+
+| Phase | Sender signs | Recipient |
+|-------|--------------|-----------|
+| **Now** | Agent (`AGENT_PRIVATE_KEY`) | Wallet or escrow from agent deposit |
+| **Phase 1** | User (Thirdweb) for wallet sends | Unchanged |
+| **Phase 2** | User deposits to vault for phone recipients | Claim via link + Thirdweb + phone verify |
+| **Phase 3** | Deprecate agent-funded sends except gas sponsorship / demos | Full phone-first remittance |
+
+Keep `AGENT_PRIVATE_KEY` only for: server health checks, MCP demos, scheduled jobs that users explicitly authorize, or subsidized gas — not routine user sends.
+
+---
+
+## Implementation phases
+
+### Phase 0 — Telegram-first onboarding
+- [ ] `GET /api/user/status` + `POST /api/user/link` (`telegramUserId` ↔ wallet)
+- [ ] Web `/auth?tg=` — Thirdweb signup + auto-link + redirect home
+- [ ] Web `/deposit?tg=` — deposit flow with return-to-Telegram CTA
+- [ ] Bot: welcome, inline buttons, state-aware replies (unknown → wallet → deposit → send)
+- [ ] `remifi-api user status --telegram-id` for OpenClaw skill
+- [ ] Balance refresh after deposit (poll or webhook → proactive Telegram message)
+
+### Phase 1 — Per-user data + one-tap web sends
+- [ ] `userId` model and scoped `contacts` / `history` on agent API
+- [ ] Web: pass wallet address on `/api/intent` and `/api/transfer/prepare`
+- [ ] `POST /api/transfer/prepare` + `POST /api/transfer/confirm` (split prepare/sign)
+- [ ] `PayChat` confirm button → Thirdweb `sendTransaction` (in-app wallet, no MetaMask)
+- [ ] Default connect flow: in-app wallet only; external wallets behind "Advanced"
+- [ ] Funding checks against **user** balance (public address), not agent wallet
+- [ ] Telegram: quote in chat → confirm link → web one-tap sign
+
+### Phase 2 — User-funded escrow + claim hardening
+- [ ] User-signed `RemifiVault.deposit` (replace agent `executeEscrowRemittance` for production)
+- [ ] Deploy / configure `REMIFI_VAULT_ADDRESS` on target network
+- [ ] Claim page: phone OTP vs `phoneHash` before claim
+- [ ] After claim: upsert contact `walletAddress` for sender’s book
+
+### Phase 3 — Channel parity & polish
+- [ ] Web-first users: `/profile` → “Connect Telegram” (reverse link)
+- [ ] “Chat on Telegram” CTA across web shell
+- [ ] Telegram Web App mini-browser for auth/deposit without leaving Telegram
+- [ ] Recipient notifications (Twilio) when sender opts in
+- [ ] Spending limits per `userId` (not global agent limits)
+
+---
+
+## Example end-to-end (Telegram-first, then Kofi)
+
+1. **Ama** finds `@RemifiBot`, no account. Bot sends create-wallet link → Thirdweb signup on phone → wallet linked.
+2. Bot sends deposit link → Ama adds $50 via MoonPay.
+3. Bot: *"Funded ✓ — who should we send to?"* Ama: *"Send 10 USD to Kofi"*.
+4. Agent resolves Kofi → `+233…` from Ama's contacts (bot helped her add People via link earlier), no wallet.
+5. Quote in Telegram → Ama says *yes* → confirm link → one tap → Thirdweb signs escrow deposit.
+6. Bot returns claim URL for Kofi; Ama forwards on WhatsApp.
+7. Kofi claims on web → later taps *Talk to Remifi on Telegram*.
+
+## Example end-to-end (web-first, Kofi phone only)
+
+1. **Allen** (web, Thirdweb wallet funded with USDC): *“Send 10 USD to Kofi”* in AI Pay.
+2. Agent resolves Kofi → `+233…` from Allen’s contacts, no wallet.
+3. Quote: ~X GHS via Mento; delivery = escrow.
+4. Allen confirms → Thirdweb signs swap + vault deposit.
+5. Agent returns claim URL; Allen shares link to Kofi on WhatsApp.
+6. Kofi opens `remifi.xyz/claim?c=…&s=…` → creates Thirdweb wallet with **same phone** → OTP passes → claims GHS to new wallet.
+7. Kofi taps **“Talk to Remifi on Telegram”** → continues with agent for future sends.
+
+---
+
+## Success criteria
+
+- [ ] No production user send is signed by `AGENT_PRIVATE_KEY`.
+- [ ] *“Send to {name}”* works when contact has phone but no wallet.
+- [ ] Recipient can claim only with link + matching phone.
+- [ ] Contacts and history are isolated per user across web and Telegram.
+- [ ] Web app exposes a clear path to the Telegram agent.
+- [ ] New Telegram user with no account can reach first send via bot-guided wallet + deposit links.
+
+---
+
+## References in repo
+
+- Escrow + claim URL: `src/escrow/client.ts`, `contract/src/RemifiVault.sol`
+- Claim UI: `web/app/components/ClaimFlow.tsx`, `/claim`
+- Contact resolve: `src/contacts/resolve.ts`, `src/api/service.ts` (`resolveIntent`, `deliveryHint`)
+- Thirdweb connect: `web/app/components/ConnectWallet.tsx`
+- Signing models doc: `README.md` § Signing models

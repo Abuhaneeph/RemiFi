@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useActiveAccount } from "thirdweb/react";
 import {
   fetchAgentInfo,
   fetchBalances,
@@ -37,25 +38,35 @@ function deductUsd(items: BalanceItem[], amountUsd: number): BalanceItem[] {
 }
 
 export function AgentApiProvider({ children }: { children: ReactNode }) {
+  const account = useActiveAccount();
+  const userAddress = account?.address ?? null;
+
   const [balances, setBalances] = useState<BalanceItem[]>([]);
   const [balanceAddress, setBalanceAddress] = useState<string | null>(null);
   const [balancesLoading, setBalancesLoading] = useState(true);
   const [balancesError, setBalancesError] = useState<string | null>(null);
 
   const syncBalances = useCallback(async () => {
-    const agentInfo = await fetchAgentInfo();
-    const address = agentInfo.address ?? null;
+    const address =
+      userAddress ??
+      (await fetchAgentInfo().catch(() => ({ address: null }))).address;
+
     if (!address) {
       setBalances([]);
       setBalanceAddress(null);
-      setBalancesError("Agent wallet not configured.");
+      setBalancesError(
+        userAddress
+          ? "Could not read wallet balance."
+          : "Connect your wallet or configure the agent wallet."
+      );
       return;
     }
+
     const { items } = await fetchBalances(address);
     setBalances(Array.isArray(items) ? items : []);
     setBalanceAddress(address);
     setBalancesError(null);
-  }, []);
+  }, [userAddress]);
 
   const refreshBalances = useCallback(async () => {
     setBalancesLoading(true);
@@ -81,7 +92,7 @@ export function AgentApiProvider({ children }: { children: ReactNode }) {
         try {
           await syncBalances();
         } catch {
-          /* keep optimistic value until a poll succeeds */
+          /* keep polling */
         }
       }
     },
@@ -89,8 +100,10 @@ export function AgentApiProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    return deferNonCritical(() => void refreshBalances());
-  }, [refreshBalances]);
+    return deferNonCritical(() => {
+      void refreshBalances();
+    });
+  }, [refreshBalances, userAddress]);
 
   const value = useMemo(
     () => ({

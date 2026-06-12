@@ -19,6 +19,7 @@ import {
 } from "../lib/api";
 import { deferNonCritical } from "../lib/defer";
 import { pickPhoneContacts } from "../lib/phone-contacts";
+import { useWallet } from "./WalletContext";
 
 const STORAGE_KEY = "remitclaw-added-contacts";
 const PHONE_IMPORT_KEY = "remitclaw-phone-import-done";
@@ -110,6 +111,7 @@ function mergePeople(local: Person[], remote: StoredContact[] | undefined): Pers
 }
 
 export function ContactsProvider({ children }: { children: ReactNode }) {
+  const { address } = useWallet();
   const [added, setAdded] = useState<Person[]>([]);
   const [remote, setRemote] = useState<StoredContact[]>([]);
   const [ready, setReady] = useState(false);
@@ -127,18 +129,24 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
   }, [added, ready]);
 
   /** Push manually added contacts to the agent (phone imports use a separate endpoint). */
-  const pushManualToAgent = useCallback(async (manual: Person[]) => {
-    if (!manual.length) return;
-    setSyncing(true);
-    try {
-      const { contacts } = await syncContacts(manual.map(personToStored));
-      setRemote(Array.isArray(contacts) ? contacts : []);
-    } catch {
-      // Agent API may be offline during local dev.
-    } finally {
-      setSyncing(false);
-    }
-  }, []);
+  const pushManualToAgent = useCallback(
+    async (manual: Person[]) => {
+      if (!manual.length) return;
+      setSyncing(true);
+      try {
+        const { contacts } = await syncContacts(
+          manual.map(personToStored),
+          address
+        );
+        setRemote(Array.isArray(contacts) ? contacts : []);
+      } catch {
+        // Agent API may be offline during local dev.
+      } finally {
+        setSyncing(false);
+      }
+    },
+    [address]
+  );
 
   useEffect(() => {
     if (!ready) return;
@@ -184,7 +192,10 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
         .filter((c): c is { name: string; phone: string } => Boolean(c.phone))
         .map((c) => ({ name: c.name, phone: c.phone! }));
 
-      const { contacts, imported } = await importPhoneContacts(entries);
+      const { contacts, imported } = await importPhoneContacts(
+        entries,
+        address
+      );
       setRemote(Array.isArray(contacts) ? contacts : []);
       localStorage.setItem(PHONE_IMPORT_KEY, "1");
       return imported;
@@ -193,7 +204,7 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     } finally {
       setSyncing(false);
     }
-  }, []);
+  }, [address]);
 
   const addPerson = useCallback((input: AddPersonInput) => {
     const name = input.name.trim();

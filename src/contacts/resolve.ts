@@ -1,4 +1,4 @@
-import type { TransferContext } from "../api/service.js";
+import type { TransferContext } from "../api/transfer-context.js";
 import { findContactByName, findContactByPhone } from "./store.js";
 import type { StoredContact } from "./types.js";
 

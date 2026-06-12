@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Avatar } from "./Avatar";
 import { TokenIcon } from "./TokenIcon";
 import { useContacts } from "../context/ContactsContext";
+import { useWallet } from "../context/WalletContext";
 import {
   explorerTxUrl,
   fetchHistory,
@@ -23,6 +24,7 @@ function tokenLogo(currency: string): string {
 
 export function WalletRecent() {
   const { allPeople } = useContacts();
+  const { address } = useWallet();
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +33,7 @@ export function WalletRecent() {
     let cancelled = false;
     (async () => {
       try {
-        const { items: rows } = await fetchHistory();
+        const { items: rows } = await fetchHistory(address);
         if (!cancelled) {
           setItems(rows);
           setError(null);
@@ -48,7 +50,7 @@ export function WalletRecent() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [address]);
 
   if (loading) {
     return (

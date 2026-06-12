@@ -8,6 +8,7 @@ import { Avatar } from "./Avatar";
 import { LanguageSelector } from "./LanguageSelector";
 import { LogoutButton } from "./LogoutButton";
 import { ProfileSettings } from "./ProfileSettings";
+import { TelegramLink } from "./TelegramLink";
 import { ChevronLeftIcon } from "./icons";
 
 const ProfileWalletCard = dynamic(
@@ -59,6 +60,10 @@ export function ProfileContent() {
         <Link href="/people" className="btn btn-gradient btn-block mt-8">
           {t("profile.manageContacts")}
         </Link>
+
+        <div className="mt-3">
+          <TelegramLink label="Chat with Remifi on Telegram" />
+        </div>
       </div>
     </>
   );

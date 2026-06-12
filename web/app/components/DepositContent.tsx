@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import QRCode from "qrcode";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useWallet, shortAddress } from "../context/WalletContext";
 import { useLanguage } from "../context/LanguageContext";
 import { celoChain } from "../lib/thirdweb";
 import { ChevronLeftIcon } from "./icons";
 import { ConnectWallet } from "./ConnectWallet";
 import { MoonPayOnRamp } from "./MoonPayOnRamp";
+import { TelegramLink } from "./TelegramLink";
+import { useTelegramDeepLink } from "../hooks/useTelegramDeepLink";
 
-export function DepositContent() {
+function DepositBody() {
   const { address, isConnected } = useWallet();
   const { t } = useLanguage();
+  const { telegramUserId } = useTelegramDeepLink();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -89,9 +92,23 @@ export function DepositContent() {
                 {copied ? t("deposit.copied") : t("deposit.copy")}
               </button>
             </section>
+
+            {telegramUserId ? (
+              <div className="mt-6">
+                <TelegramLink telegramUserId={telegramUserId} />
+              </div>
+            ) : null}
           </>
         )}
       </div>
     </>
+  );
+}
+
+export function DepositContent() {
+  return (
+    <Suspense fallback={null}>
+      <DepositBody />
+    </Suspense>
   );
 }

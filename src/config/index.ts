@@ -66,6 +66,11 @@ const ConfigSchema = z
   x402Token: z.string().default("USDC"),
   /** thirdweb secret key — enables real x402 verify/settle via facilitator. */
   thirdwebSecretKey: z.string().optional(),
+
+  /** Telegram bot username without @ — used in onboarding deep links. */
+  telegramBotUsername: z.string().default("remifi_bot"),
+  /** Minimum primary-token balance (USD) before state becomes `funded`. */
+  minSendBalanceUsd: z.coerce.number().default(1),
 })
   .transform((raw) => ({
     ...raw,
@@ -123,5 +128,8 @@ export function loadConfig(): Config {
     x402Network: process.env.X402_NETWORK,
     x402Token: process.env.X402_TOKEN,
     thirdwebSecretKey: process.env.THIRDWEB_SECRET_KEY,
+
+    telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME,
+    minSendBalanceUsd: process.env.MIN_SEND_BALANCE_USD,
   });
 }

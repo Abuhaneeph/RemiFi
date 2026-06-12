@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useLanguage } from "../context/LanguageContext";
+import { TelegramLink } from "./TelegramLink";
 
 export function AIPayBanner({ compact = false }: { compact?: boolean }) {
   const { t } = useLanguage();
@@ -35,6 +36,12 @@ export function AIPayBanner({ compact = false }: { compact?: boolean }) {
           className="ai-pay-coins pointer-events-none"
         />
       </Link>
+      <div className="mt-3">
+        <TelegramLink
+          label="Or chat on Telegram"
+          className="btn btn-block border border-line bg-surface text-sm font-semibold text-ink"
+        />
+      </div>
     </div>
   );
 }
