@@ -95,6 +95,9 @@ openclaw gateway run
 |---------|-------|-----|
 | Bot ignores remittance rules / asks for wallet | Workspace is `~/.openclaw/workspace` | Set `OPENCLAW_CONFIG_PATH` to repo `openclaw.json`, restart |
 | `openclaw config file` → `~/.openclaw/openclaw.json` | Gateway not using repo config | Add `OPENCLAW_CONFIG_PATH` to `.env` + systemd `EnvironmentFile` |
+| `Gateway start blocked: missing gateway.mode` (exit 78) | Repo config predates OpenClaw 2026.6+ guard | Ensure `openclaw.json` has `"gateway": { "mode": "local" }`, or run `openclaw config set gateway.mode local` |
+| `curl` to `:18789` returns `HTTP:000` | Gateway not running or not listening | `sudo systemctl status openclaw`; `ss -tlnp \| grep 18789` |
+| Chat completions 404 / unavailable | Endpoint disabled by default in OpenClaw 2026.6+ | `openclaw config set gateway.http.endpoints.chatCompletions.enabled true` then restart |
 | Doctor shows agent `main` on telegram | Stale onboard config | Same as above; `agents.list` should be `remifi` |
 | `git pull` blocked by `package-lock.json` | Local npm install on VPS | `git stash` then `git pull` (as you did) |
 
