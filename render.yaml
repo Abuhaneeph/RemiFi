@@ -35,6 +35,10 @@ services:
         sync: false
       - key: WEB_ORIGIN
         sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        value: remifi_bot
+      - key: MIN_SEND_BALANCE_USD
+        value: "1"
       - key: DEMO_RECIPIENT_ADDRESS
         sync: false
       - key: REMIFI_VAULT_ADDRESS

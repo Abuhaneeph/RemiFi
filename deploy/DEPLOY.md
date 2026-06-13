@@ -24,6 +24,8 @@ Telegram/WhatsApp (VPS) ──► api.remifi.xyz (same)
 | `PUBLIC_AGENT_API_URL` | `https://api.remifi.xyz` |
 | `PUBLIC_BASE_URL` | `https://remifi.xyz` |
 | `WEB_ORIGIN` | `https://remifi.xyz` |
+| `TELEGRAM_BOT_USERNAME` | `remifi_bot` (auth/deposit deep links) |
+| `MIN_SEND_BALANCE_USD` | `1` (min balance before Telegram send) |
 | `DATA_DIR` | `/data` (set in blueprint) |
 | `AGENT_ID` | After `npm run register` |
 | `REMIFI_VAULT_ADDRESS` | Optional — phone claim escrow |
@@ -47,7 +49,8 @@ Set in Vercel env (see `web/.env.production.example`):
 | `NEXT_PUBLIC_AGENT_API_URL` | `https://api.remifi.xyz` |
 | `NEXT_PUBLIC_AGENT_API_KEY` | Same as Render `AGENT_API_KEY` |
 | `NEXT_PUBLIC_CELO_CHAIN_ID` | Match Render |
-| `NEXT_PUBLIC_THIRDWEB_CLIENT_ID` | Wallet auth |
+| `NEXT_PUBLIC_THIRDWEB_CLIENT_ID` | Wallet auth (add `remifi.xyz` + `localhost` in thirdweb dashboard) |
+| `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME` | `remifi_bot` |
 
 Web Pay calls `POST /api/intent` and `POST /api/transfer`. People page syncs contacts via `POST /api/contacts/sync`.
 
@@ -126,11 +129,52 @@ For local OpenClaw without Render, either:
 - Set `PUBLIC_AGENT_API_URL=http://localhost:8787` and use `npm run remifi-api`, or
 - Unset `PUBLIC_AGENT_API_URL` and use `npm run remifi` (in-process CLI).
 
+## Push `allusers` to production
+
+### 1. Git (local)
+
+```bash
+git checkout allusers
+git pull origin allusers
+# commit is prepared on this branch — then:
+git push origin allusers
+```
+
+Merge to `main` when ready (Render/Vercel usually track `main`):
+
+```bash
+git checkout main
+git pull origin main
+git merge allusers
+git push origin main
+```
+
+### 2. Render (`api.remifi.xyz`)
+
+- **Manual deploy** or auto-deploy on push to tracked branch.
+- Confirm env: `WEB_ORIGIN=https://remifi.xyz`, `TELEGRAM_BOT_USERNAME`, `AGENT_API_KEY`, `PUBLIC_AGENT_API_URL`.
+- After deploy: `curl https://api.remifi.xyz/api/health` → `executionReady: true`.
+
+### 3. Vercel (`remifi.xyz`)
+
+- Redeploy after merge; set vars from `web/.env.production.example`.
+- Add `https://remifi.xyz` to thirdweb **Allowed domains**.
+
+### 4. VPS (Telegram — optional for web-only demo)
+
+```bash
+git pull
+sudo systemctl restart openclaw
+```
+
+Pass `--telegram-id` on remifi-api calls (see `skills/remifi/SKILL.md`).
+
 ## Unified checklist
 
 - [ ] Render healthy, wallet funded
-- [ ] Web Pay quotes and sends
+- [ ] Web wallet connect + profile shows user email/address
+- [ ] Web Pay prepare/confirm flow (`/api/transfer/prepare` + user signs)
 - [ ] Contact added on web appears in `GET /api/contacts?name=Mom`
-- [ ] Telegram "send to Mom" uses same quote (via `remifi-api`)
-- [ ] Telegram send shows in `GET /api/history`
-- [ ] One wallet address on `/api/agent` for all channels
+- [ ] Telegram "send to Mom" uses same quote (via `remifi-api --telegram-id`)
+- [ ] Telegram send returns `confirmUrl` (user signs on web)
+- [ ] Per-user data under `/data/users/` on Render (not in git)

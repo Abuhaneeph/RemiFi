@@ -9,9 +9,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useActiveAccount } from "thirdweb/react";
+import { useActiveAccount, useActiveWalletConnectionStatus } from "thirdweb/react";
 import {
-  fetchAgentInfo,
   fetchBalances,
   type BalanceItem,
 } from "../lib/api";
@@ -39,6 +38,7 @@ function deductUsd(items: BalanceItem[], amountUsd: number): BalanceItem[] {
 
 export function AgentApiProvider({ children }: { children: ReactNode }) {
   const account = useActiveAccount();
+  const connectionStatus = useActiveWalletConnectionStatus();
   const userAddress = account?.address ?? null;
 
   const [balances, setBalances] = useState<BalanceItem[]>([]);
@@ -47,17 +47,19 @@ export function AgentApiProvider({ children }: { children: ReactNode }) {
   const [balancesError, setBalancesError] = useState<string | null>(null);
 
   const syncBalances = useCallback(async () => {
-    const address =
-      userAddress ??
-      (await fetchAgentInfo().catch(() => ({ address: null }))).address;
+    if (connectionStatus === "connecting") {
+      return;
+    }
+
+    const address = userAddress;
 
     if (!address) {
       setBalances([]);
       setBalanceAddress(null);
       setBalancesError(
-        userAddress
+        connectionStatus === "connected"
           ? "Could not read wallet balance."
-          : "Connect your wallet or configure the agent wallet."
+          : "Connect your wallet to see balances."
       );
       return;
     }
@@ -66,7 +68,7 @@ export function AgentApiProvider({ children }: { children: ReactNode }) {
     setBalances(Array.isArray(items) ? items : []);
     setBalanceAddress(address);
     setBalancesError(null);
-  }, [userAddress]);
+  }, [userAddress, connectionStatus]);
 
   const refreshBalances = useCallback(async () => {
     setBalancesLoading(true);
@@ -100,10 +102,14 @@ export function AgentApiProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    if (connectionStatus === "connecting") {
+      setBalancesLoading(true);
+      return;
+    }
     return deferNonCritical(() => {
       void refreshBalances();
     });
-  }, [refreshBalances, userAddress]);
+  }, [refreshBalances, userAddress, connectionStatus]);
 
   const value = useMemo(
     () => ({

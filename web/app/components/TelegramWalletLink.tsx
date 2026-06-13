@@ -5,23 +5,25 @@ import { useActiveAccount } from "thirdweb/react";
 import { linkTelegramUser, markUserAuthStarted } from "../lib/api";
 import { useTelegramDeepLink } from "../hooks/useTelegramDeepLink";
 
-/** Links Thirdweb wallet to Telegram user id from ?tg= deep link. */
+/** Registers the connected wallet with the agent API (and Telegram id when present). */
 export function TelegramWalletLink() {
   const { telegramUserId } = useTelegramDeepLink();
   const account = useActiveAccount();
 
   useEffect(() => {
-    if (!telegramUserId || !account?.address) return;
+    if (!account?.address) return;
 
     void (async () => {
       try {
-        await markUserAuthStarted(telegramUserId);
+        if (telegramUserId) {
+          await markUserAuthStarted(telegramUserId);
+        }
         await linkTelegramUser({
-          telegramUserId,
+          telegramUserId: telegramUserId ?? undefined,
           walletAddress: account.address,
         });
       } catch {
-        /* best-effort — user can retry from profile */
+        /* best-effort */
       }
     })();
   }, [telegramUserId, account?.address]);

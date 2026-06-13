@@ -2,17 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { FAVOURITES } from "../data/people";
 import { Avatar } from "./Avatar";
 import { BoltIcon } from "./icons";
+import { InlineWalletSetup } from "./InlineWalletSetup";
 import { useLanguage } from "../context/LanguageContext";
-
-const InlineWalletSetup = dynamic(
-  () => import("./InlineWalletSetup").then((m) => m.InlineWalletSetup),
-  { ssr: false }
-);
 
 function StepHero({ step }: { step: "welcome" | "ai-pay" | "people" }) {
   const { t } = useLanguage();

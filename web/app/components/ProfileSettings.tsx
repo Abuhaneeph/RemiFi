@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
+import { useUserProfile } from "../hooks/useUserProfile";
 import { useWallet, shortAddress } from "../context/WalletContext";
 import { useWalletPreferences } from "../context/WalletPreferencesContext";
 import { fetchProfile, type ProfileCorridor } from "../lib/api";
@@ -31,6 +32,7 @@ function formatUsd(amount: number): string {
 export function ProfileSettings() {
   const { t } = useLanguage();
   const { isConnected, address } = useWallet();
+  const { displayName, subtitle, authLabel } = useUserProfile();
   const { defaultCorridorId, setDefaultCorridorId } = useWalletPreferences();
   const [limits, setLimits] = useState(FALLBACK_LIMITS);
   const [corridors, setCorridors] = useState<ProfileCorridor[]>(FALLBACK_CORRIDORS);
@@ -68,8 +70,12 @@ export function ProfileSettings() {
   const selectedCorridor =
     corridors.find((c) => c.id === defaultCorridorId) ?? corridors[0];
 
-  const accountValue = isConnected ? t("profile.verified") : t("profile.notConnected");
-  const accountHint = isConnected ? shortAddress(address) : undefined;
+  const accountValue = !isConnected
+    ? t("profile.notConnected")
+    : displayName ?? t("profile.verified");
+  const accountHint = isConnected
+    ? subtitle ?? (authLabel ? `${authLabel} · ${shortAddress(address)}` : shortAddress(address))
+    : undefined;
 
   const rows = [
     {

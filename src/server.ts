@@ -56,8 +56,22 @@ import {
 
 const config = loadConfig();
 
-function setCors(res: ServerResponse, origin: string) {
-  res.setHeader("Access-Control-Allow-Origin", origin);
+const LOCAL_WEB_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
+];
+
+function corsAllowOrigin(cfg: Config, requestOrigin?: string): string {
+  if (cfg.webOrigin === "*") return "*";
+  const allowed = new Set([cfg.webOrigin, ...LOCAL_WEB_ORIGINS]);
+  if (requestOrigin && allowed.has(requestOrigin)) return requestOrigin;
+  return cfg.webOrigin;
+}
+
+function setCors(res: ServerResponse, cfg: Config, requestOrigin?: string) {
+  res.setHeader("Access-Control-Allow-Origin", corsAllowOrigin(cfg, requestOrigin));
   res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
@@ -291,7 +305,7 @@ function handle8004Probe(
 }
 
 const server = createServer(async (req, res) => {
-  setCors(res, config.webOrigin);
+  setCors(res, config, req.headers.origin);
 
   if (req.method === "OPTIONS") {
     res.statusCode = 204;

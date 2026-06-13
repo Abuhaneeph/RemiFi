@@ -175,6 +175,8 @@ export const messages = {
     },
     profile: {
       title: "Profile",
+      guest: "Guest",
+      connectHint: "Connect your wallet to get started",
       walletSubtitle: "RemitClaw wallet · Celo",
       accountDetails: "Account details",
       verified: "Verified",
@@ -407,6 +409,8 @@ export const messages = {
     },
     profile: {
       title: "Perfil",
+      guest: "Invitado",
+      connectHint: "Conecta tu billetera para empezar",
       walletSubtitle: "Billetera RemitClaw · Celo",
       accountDetails: "Detalles de cuenta",
       verified: "Verificado",
@@ -636,6 +640,8 @@ export const messages = {
     },
     profile: {
       title: "Perfil",
+      guest: "Convidado",
+      connectHint: "Conecte sua carteira para começar",
       walletSubtitle: "Carteira RemitClaw · Celo",
       accountDetails: "Detalhes da conta",
       verified: "Verificado",
@@ -865,6 +871,8 @@ export const messages = {
     },
     profile: {
       title: "Profil",
+      guest: "Invité",
+      connectHint: "Connectez votre portefeuille pour commencer",
       walletSubtitle: "Portefeuille RemitClaw · Celo",
       accountDetails: "Détails du compte",
       verified: "Vérifié",

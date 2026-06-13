@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { PROFILE } from "../data/people";
+import { useLanguage } from "../context/LanguageContext";
+import { useUserProfile } from "../hooks/useUserProfile";
 import { Avatar } from "./Avatar";
 import { BellIcon, ChevronDownIcon, ScanIcon } from "./icons";
 import { LanguageSelector } from "./LanguageSelector";
@@ -10,6 +11,9 @@ import { NotificationsSheet } from "./NotificationsSheet";
 import { ScanSheet } from "./ScanSheet";
 
 export function AppHeader() {
+  const { t } = useLanguage();
+  const { displayName, avatarSrc } = useUserProfile();
+  const name = displayName ?? t("profile.guest");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
 
@@ -20,9 +24,9 @@ export function AppHeader() {
     <>
       <header className="flex items-center justify-between">
         <Link href="/profile" className="flex items-center gap-2">
-          <Avatar name={PROFILE.name} src={PROFILE.avatar} size={36} ring />
+          <Avatar name={name} src={avatarSrc} size={36} ring />
           <span className="flex items-center gap-1 text-[0.95rem] font-bold">
-            {PROFILE.name}
+            {name}
             <ChevronDownIcon className="h-4 w-4 text-soft" />
           </span>
         </Link>

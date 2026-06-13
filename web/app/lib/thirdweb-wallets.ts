@@ -3,12 +3,15 @@ import { celoChain } from "./thirdweb";
 
 /** Default in-app wallet — silent one-tap signing after UI confirm. */
 export function getRemifiInAppWallet(): Wallet {
+  const sponsorGas =
+    process.env.NEXT_PUBLIC_THIRDWEB_SPONSOR_GAS !== "false";
+
   return inAppWallet({
     auth: { options: ["email", "google", "apple", "passkey", "phone"] },
     metadata: { name: "Remifi" },
     smartAccount: {
       chain: celoChain,
-      sponsorGas: true,
+      sponsorGas,
     },
   });
 }

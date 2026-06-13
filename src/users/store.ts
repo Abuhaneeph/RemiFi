@@ -89,6 +89,28 @@ export function touchTelegramUser(
   return user;
 }
 
+/** Wallet-only signup (web) before Telegram is linked. */
+export function touchWalletUser(
+  config: Config,
+  walletAddress: string
+): User {
+  const existing = findUserByWallet(config, walletAddress);
+  if (existing) return existing;
+
+  const now = new Date().toISOString();
+  const user: User = {
+    userId: randomUUID(),
+    walletAddress: normalizeWallet(walletAddress) as `0x${string}`,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const registry = loadRegistry(config);
+  registry.users.push(user);
+  saveRegistry(config, registry);
+  ensureUserDir(config, user.userId);
+  return user;
+}
+
 export function markAuthStarted(
   config: Config,
   telegramUserId: string
@@ -132,7 +154,12 @@ export function linkTelegramWallet(
     return byWallet;
   }
 
-  const base = byTg ?? byWallet ?? touchTelegramUser(config, input.telegramUserId!);
+  const base =
+    byTg ??
+    byWallet ??
+    (input.telegramUserId
+      ? touchTelegramUser(config, input.telegramUserId)
+      : touchWalletUser(config, wallet));
   const updated: User = {
     ...base,
     telegramUserId: input.telegramUserId ?? base.telegramUserId,
