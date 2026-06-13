@@ -1,5 +1,14 @@
 [
   {
+    "id": "alex-njoya-1781343877988",
+    "name": "Alex Njoya",
+    "country": "PH",
+    "phone": "+233240027151",
+    "favourite": false,
+    "source": "manual",
+    "updatedAt": "2026-06-13T10:04:56.243Z"
+  },
+  {
     "id": "mom",
     "name": "Mom",
     "country": "PH",

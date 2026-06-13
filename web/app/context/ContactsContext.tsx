@@ -154,14 +154,14 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     return deferNonCritical(() => {
       void (async () => {
         try {
-          const { contacts } = await fetchContacts();
+          const { contacts } = await fetchContacts(address);
           setRemote(Array.isArray(contacts) ? contacts : []);
         } catch {
           // Fall back to local-only contacts.
         }
       })();
     });
-  }, [ready]);
+  }, [ready, address]);
 
   const allPeople = useMemo(() => mergePeople(added, remote), [added, remote]);
 

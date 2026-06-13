@@ -29,6 +29,7 @@ interface Args {
   wallet?: string;
   phone?: string;
   telegramId?: string;
+  senderWallet?: string;
   favourite?: boolean;
   yes: boolean;
 }
@@ -78,6 +79,8 @@ function parseArgs(): Args {
     else if (a === "--phone" && argv[i + 1]) args.phone = argv[++i].trim();
     else if (a === "--telegram-id" && argv[i + 1]) {
       args.telegramId = argv[++i].trim();
+    } else if (a === "--sender-wallet" && argv[i + 1]) {
+      args.senderWallet = argv[++i].trim();
     }
     else if (a === "--favourite" || a === "--favorite") args.favourite = true;
     else if (a === "--yes" || a === "-y") args.yes = true;
@@ -115,7 +118,9 @@ function transferContext(args: Args): TransferContext | undefined {
   if (args.toWallet) ctx.recipientWallet = args.toWallet;
   if (args.toPhone) ctx.recipientPhone = args.toPhone;
   if (args.telegramId) ctx.telegramUserId = args.telegramId;
-  if (args.wallet && WALLET_RE.test(args.wallet)) ctx.senderWallet = args.wallet;
+  if (args.senderWallet && WALLET_RE.test(args.senderWallet)) {
+    ctx.senderWallet = args.senderWallet;
+  }
   return Object.keys(ctx).length ? ctx : undefined;
 }
 
@@ -134,6 +139,7 @@ function scopedQuery(
     }
   }
   if (args.telegramId) search.set("telegramUserId", args.telegramId);
+  if (args.senderWallet) search.set("senderWallet", args.senderWallet);
   const q = search.toString();
   return q ? `?${q}` : "";
 }

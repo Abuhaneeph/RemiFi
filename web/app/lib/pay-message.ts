@@ -49,5 +49,21 @@ export function payErrorHint(message: string): string {
   if (lower.includes("cannot find module") && lower.includes("mento")) {
     return "The agent API is up but Mento quotes failed on the server — redeploy the API after the latest fix.";
   }
+  if (lower.includes("not tradable") || lower.includes("circuit breaker")) {
+    return "The on-chain swap route may be paused — try again later or a different amount.";
+  }
   return "Check api.remifi.xyz/api/health or try: Send $50 to Mom.";
+}
+
+/** Avoid doubling the error prefix when the API already returned a full sentence. */
+export function formatPayError(
+  reason: string,
+  errorPrefix: string
+): string {
+  const trimmed = reason.trim();
+  if (trimmed.startsWith(errorPrefix) || trimmed.includes(errorPrefix)) {
+    const hint = payErrorHint(trimmed);
+    return hint && !trimmed.includes(hint) ? `${trimmed} ${hint}` : trimmed;
+  }
+  return `${errorPrefix} ${trimmed}. ${payErrorHint(trimmed)}`;
 }

@@ -11,11 +11,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <LanguageProvider>
       <WalletPreferencesProvider>
-        <AddContactProvider>
-          <Web3Providers>
-            <ContactsProvider>{children}</ContactsProvider>
-          </Web3Providers>
-        </AddContactProvider>
+        <Web3Providers>
+          <ContactsProvider>
+            <AddContactProvider>{children}</AddContactProvider>
+          </ContactsProvider>
+        </Web3Providers>
       </WalletPreferencesProvider>
     </LanguageProvider>
   );

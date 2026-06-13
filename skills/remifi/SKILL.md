@@ -146,7 +146,9 @@ npm run remifi -- health
 
 ### Contacts (agent is the hub)
 
-All channels read **one store on the agent API** (`/api/contacts` on Render). Web People page syncs via `POST /api/contacts/sync`.
+Each user has their own contact list on the agent API (same store as the web People page — additions there sync automatically). Telegram uses `--telegram-id`; the session context may supply a connected wallet for web.
+
+**Never** say a contact is missing without running `remifi-api contacts <name>` with the session identity first.
 
 Contacts enter the store through:
 
