@@ -46,7 +46,11 @@ import type { PhoneImportEntry } from "../contacts/types.js";
 import type { StoredContact } from "../contacts/types.js";
 import { executeEscrowRemittance, readEscrow, vaultConfigured } from "../escrow/client.js";
 import { notifyClaimLink } from "../notifications/twilio.js";
-import { executeRemittance } from "../transfers/onchain.js";
+import { resolveRequestIdentity } from "../users/context.js";
+import { primaryBalanceUsd } from "../users/balance.js";
+import type { TransferContext } from "./transfer-context.js";
+
+export type { TransferContext } from "./transfer-context.js";
 
 export interface QuoteResult {
   kind: "quote" | "schedule";
@@ -77,6 +81,9 @@ export interface QuoteResult {
   dailyRemainingUsd?: number;
   /** Human-readable blocker when fundingOk is false. */
   fundingHint?: string;
+  /** User wallet balance when senderWallet is provided. */
+  userSourceBalance?: number;
+  confirmUrl?: string;
 }
 
 export interface AgentFunding {
@@ -85,6 +92,42 @@ export interface AgentFunding {
   shortfall: number;
   gasOk: boolean;
   fundingHint?: string;
+}
+
+export interface UserFunding {
+  fundingOk: boolean;
+  userSourceBalance: number;
+  shortfall: number;
+  fundingHint?: string;
+}
+
+function scopedDataDir(config: Config, ctx?: TransferContext): string {
+  return resolveRequestIdentity(config, {
+    userId: ctx?.userId,
+    telegramUserId: ctx?.telegramUserId,
+    walletAddress: ctx?.senderWallet,
+  }).dataDir;
+}
+
+export async function getUserFunding(
+  config: Config,
+  walletAddress: string,
+  amountUsd: number,
+  sourceCurrency: string
+): Promise<UserFunding> {
+  const balance = await primaryBalanceUsd(config, walletAddress);
+  const hasFunds = balance >= amountUsd;
+  const shortfall = hasFunds ? 0 : Number((amountUsd - balance).toFixed(6));
+  let fundingHint: string | undefined;
+  if (!hasFunds) {
+    fundingHint = `Your wallet needs ${shortfall} more ${sourceCurrency} (has ${balance}).`;
+  }
+  return {
+    fundingOk: hasFunds,
+    userSourceBalance: balance,
+    shortfall,
+    fundingHint,
+  };
 }
 
 /**
@@ -147,15 +190,6 @@ export interface ExecuteResult {
   notificationSent?: boolean;
 }
 
-/** Optional contact fields from the web app (override parsed intent). */
-export interface TransferContext {
-  destinationCountry?: string;
-  recipientWallet?: string;
-  recipientPhone?: string;
-  /** WhatsApp / channel sender — used to match contacts by phone. */
-  senderPhone?: string;
-}
-
 function applyTransferContext(
   intent: RemittanceIntent,
   ctx?: TransferContext
@@ -173,18 +207,20 @@ function applyTransferContext(
 export function resolveIntent(
   config: Config,
   message: string,
-  ctx?: TransferContext
+  ctx?: TransferContext,
+  dataDir?: string
 ): { intent: RemittanceIntent; matchedContact?: string } {
+  const dir = dataDir ?? scopedDataDir(config, ctx);
   const parsed = parseRemittanceIntent(message);
   const contactCtx = resolveContactContext(
-    config.dataDir,
+    dir,
     parsed.recipientName,
     ctx?.senderPhone
   );
   const matched =
-    findContactByName(config.dataDir, parsed.recipientName ?? "") ??
+    findContactByName(dir, parsed.recipientName ?? "") ??
     (ctx?.senderPhone
-      ? findContactByPhone(config.dataDir, ctx.senderPhone)
+      ? findContactByPhone(dir, ctx.senderPhone)
       : undefined);
   const matchedContact = matched?.name;
 
@@ -208,10 +244,11 @@ export async function quoteForMessage(
   message: string,
   ctx?: TransferContext
 ): Promise<QuoteResult> {
-  const { intent, matchedContact } = resolveIntent(config, message, ctx);
+  const dataDir = scopedDataDir(config, ctx);
+  const { intent, matchedContact } = resolveIntent(config, message, ctx, dataDir);
 
   if (intent.frequency !== "once") {
-    const schedule = scheduleRecurringTransfer(config.dataDir, intent);
+    const schedule = scheduleRecurringTransfer(dataDir, intent);
     return {
       kind: "schedule",
       intent,
@@ -240,7 +277,14 @@ export async function quoteForMessage(
   const destLabel =
     corridor.mentoPair.includes("USDC") ? "USDC" : corridor.destinationCurrency;
 
-  const funding = await getAgentFunding(config, corridor, intent.amount);
+  const funding = ctx?.senderWallet
+    ? await getUserFunding(
+        config,
+        ctx.senderWallet,
+        intent.amount,
+        corridor.sourceCurrency
+      )
+    : await getAgentFunding(config, corridor, intent.amount);
   const limits = getSpendingLimits(config);
   const dailyRemainingUsd = Number(
     Math.max(0, limits.dailyLimitUsd - limits.dailySpentUsd).toFixed(2)
@@ -289,9 +333,16 @@ export async function quoteForMessage(
     exchangeRate:
       intent.amount > 0 ? recipientReceives / intent.amount : undefined,
     fundingOk: funding?.fundingOk,
-    agentSourceBalance: funding?.agentSourceBalance,
+    agentSourceBalance:
+      "agentSourceBalance" in (funding ?? {})
+        ? (funding as AgentFunding).agentSourceBalance
+        : undefined,
+    userSourceBalance:
+      "userSourceBalance" in (funding ?? {})
+        ? (funding as UserFunding).userSourceBalance
+        : undefined,
     shortfall: funding?.shortfall,
-    gasOk: funding?.gasOk,
+    gasOk: "gasOk" in (funding ?? {}) ? (funding as AgentFunding).gasOk : true,
     fundingHint: funding?.fundingHint,
     dailyRemainingUsd,
   };
@@ -322,7 +373,8 @@ export async function executeForMessage(
   message: string,
   ctx?: TransferContext
 ): Promise<ExecuteResult> {
-  const { intent } = resolveIntent(config, message, ctx);
+  const dataDir = scopedDataDir(config, ctx);
+  const { intent } = resolveIntent(config, message, ctx, dataDir);
   const { corridor, quote } = await prepareTransfer(config, intent);
   const corridorKey = `${corridor.sourceCurrency}-${corridor.destinationCountry.slice(0, 2)}`;
   const destDecimals = corridorDestinationDecimals(corridor);
@@ -331,7 +383,7 @@ export async function executeForMessage(
     corridor.mentoPair.includes("USDC") ? "USDC" : corridor.destinationCurrency;
 
   // Idempotency: refuse to re-send an identical transfer within 90s.
-  const duplicate = findRecentDuplicate(config.dataDir, intent);
+  const duplicate = findRecentDuplicate(dataDir, intent);
   if (duplicate && duplicate.status === "confirmed") {
     return {
       status: "confirmed",
@@ -376,7 +428,7 @@ export async function executeForMessage(
       claimId: escrow.claim.claimId,
       claimUrl: escrow.claim.claimUrl,
     };
-    saveTransaction(config.dataDir, record);
+    saveTransaction(dataDir, record);
 
     const notification = await notifyClaimLink(
       config,
@@ -425,41 +477,52 @@ export async function executeForMessage(
   };
 }
 
-export function listContacts(config: Config): StoredContact[] {
-  return loadContacts(config.dataDir);
+export function listContacts(
+  config: Config,
+  ctx?: TransferContext
+): StoredContact[] {
+  return loadContacts(scopedDataDir(config, ctx));
 }
 
 export function getContactByName(
   config: Config,
-  name: string
+  name: string,
+  ctx?: TransferContext
 ): StoredContact | undefined {
-  return findContactByName(config.dataDir, name);
+  return findContactByName(scopedDataDir(config, ctx), name);
 }
 
 export function saveContact(
   config: Config,
-  contact: StoredContact
+  contact: StoredContact,
+  ctx?: TransferContext
 ): StoredContact {
-  return upsertContact(config.dataDir, contact);
+  return upsertContact(scopedDataDir(config, ctx), contact);
 }
 
 export function bulkSyncContacts(
   config: Config,
-  contacts: StoredContact[]
+  contacts: StoredContact[],
+  ctx?: TransferContext
 ): StoredContact[] {
-  return syncContacts(config.dataDir, contacts);
+  return syncContacts(scopedDataDir(config, ctx), contacts);
 }
 
 /** Import device address-book entries into the agent contact store. */
 export function importContactsFromPhone(
   config: Config,
-  entries: PhoneImportEntry[]
+  entries: PhoneImportEntry[],
+  ctx?: TransferContext
 ): StoredContact[] {
-  return importPhoneContacts(config.dataDir, entries);
+  return importPhoneContacts(scopedDataDir(config, ctx), entries);
 }
 
-export function removeContact(config: Config, id: string): boolean {
-  return deleteContact(config.dataDir, id);
+export function removeContact(
+  config: Config,
+  id: string,
+  ctx?: TransferContext
+): boolean {
+  return deleteContact(scopedDataDir(config, ctx), id);
 }
 
 export async function getClaimInfo(config: Config, claimId: string) {
@@ -525,8 +588,11 @@ export interface HistoryItem {
   claimUrl?: string;
 }
 
-export function getHistory(config: Config): HistoryItem[] {
-  return loadTransactions(config.dataDir)
+export function getHistory(
+  config: Config,
+  ctx?: TransferContext
+): HistoryItem[] {
+  return loadTransactions(scopedDataDir(config, ctx))
     .map((r) => ({
       id: r.id,
       status: r.status,

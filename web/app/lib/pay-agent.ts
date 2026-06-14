@@ -32,7 +32,8 @@ export async function isOpenClawReachable(): Promise<boolean> {
 export async function fetchPayAgentReply(
   sessionId: string,
   history: ChatTurn[],
-  userMessage: string
+  userMessage: string,
+  senderWallet?: string | null
 ): Promise<PayAgentResult> {
   const messages: ChatTurn[] = [
     ...history,
@@ -43,7 +44,11 @@ export async function fetchPayAgentReply(
     const res = await fetch("/api/pay-agent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, messages }),
+      body: JSON.stringify({
+        sessionId,
+        messages,
+        ...(senderWallet ? { senderWallet } : {}),
+      }),
     });
     const data = (await res.json()) as {
       reply?: string;

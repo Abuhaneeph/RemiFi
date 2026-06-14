@@ -1,6 +1,15 @@
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { ResponsiveShell } from "../../components/ResponsiveShell";
+import { AuthFlow } from "../../components/AuthFlow";
 
-/** Wallet setup lives on onboarding step 2 — keep /auth as a shortcut. */
+export const dynamic = "force-dynamic";
+
 export default function AuthScreen() {
-  redirect("/");
+  return (
+    <ResponsiveShell desktopMode="centered" bareMobile>
+      <Suspense fallback={null}>
+        <AuthFlow />
+      </Suspense>
+    </ResponsiveShell>
+  );
 }

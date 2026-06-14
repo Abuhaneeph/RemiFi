@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { loadConfig, type Config } from "./config/index.js";
 import {
@@ -18,6 +19,15 @@ import {
   saveContact,
   toggleSchedule,
 } from "./api/service.js";
+import { transferContextFromBody } from "./api/transfer-context.js";
+import {
+  handleTelegramConfirm,
+  handleTransferConfirm,
+  handleTransferPrepare,
+  handleUserAuthStarted,
+  handleUserLink,
+  handleUserStatus,
+} from "./api/user-routes.js";
 import { StoredContactSchema } from "./contacts/types.js";
 import { buildA2aAgentCard, buildAgentCard } from "./agent/agent-card.js";
 import {
@@ -47,8 +57,22 @@ import {
 
 const config = loadConfig();
 
-function setCors(res: ServerResponse, origin: string) {
-  res.setHeader("Access-Control-Allow-Origin", origin);
+const LOCAL_WEB_ORIGINS = [
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
+];
+
+function corsAllowOrigin(cfg: Config, requestOrigin?: string): string {
+  if (cfg.webOrigin === "*") return "*";
+  const allowed = new Set([cfg.webOrigin, ...LOCAL_WEB_ORIGINS]);
+  if (requestOrigin && allowed.has(requestOrigin)) return requestOrigin;
+  return cfg.webOrigin;
+}
+
+function setCors(res: ServerResponse, cfg: Config, requestOrigin?: string) {
+  res.setHeader("Access-Control-Allow-Origin", corsAllowOrigin(cfg, requestOrigin));
   res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
@@ -108,33 +132,34 @@ function wantsEventStream(req: IncomingMessage): boolean {
   return (req.headers.accept ?? "").includes("text/event-stream");
 }
 
-/** Streamable HTTP: first SSE event for MCP clients and health probes. */
-function sendMcpSseEndpoint(res: ServerResponse) {
+/**
+ * Streamable HTTP: SSE session for MCP clients and 8004scan health probes.
+ * Keeps the connection open (spec expects a persistent stream) and sends the POST URL.
+ */
+function sendMcpSseStream(
+  req: IncomingMessage,
+  res: ServerResponse,
+  cfg: Config
+) {
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
-  res.end(
-    `event: endpoint\ndata: ${JSON.stringify({ version: MCP_PROTOCOL_VERSION })}\n\n`
-  );
-}
+  res.setHeader("X-Accel-Buffering", "no");
 
-function transferContext(body: Record<string, unknown>) {
-  const ctx: {
-    destinationCountry?: string;
-    recipientWallet?: string;
-    recipientPhone?: string;
-    senderPhone?: string;
-  } = {};
-  if (body.destinationCountry) {
-    ctx.destinationCountry = String(body.destinationCountry).toUpperCase();
-  }
-  if (body.recipientWallet && /^0x[a-fA-F0-9]{40}$/.test(String(body.recipientWallet))) {
-    ctx.recipientWallet = String(body.recipientWallet);
-  }
-  if (body.recipientPhone) ctx.recipientPhone = String(body.recipientPhone);
-  if (body.senderPhone) ctx.senderPhone = String(body.senderPhone);
-  return Object.keys(ctx).length ? ctx : undefined;
+  const endpoint = mcpTransportUrl(cfg);
+  res.write(
+    `event: endpoint\ndata: ${JSON.stringify({ url: endpoint, version: MCP_PROTOCOL_VERSION })}\n\n`
+  );
+
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) res.write(": keepalive\n\n");
+  }, 15_000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    if (!res.writableEnded) res.end();
+  });
 }
 
 /** Public MCP JSON-RPC for 8004scan health probes (no API key). */
@@ -148,6 +173,7 @@ async function handleMcpJsonRpc(
   const id = body.id ?? 0;
 
   if (method === "initialize") {
+    res.setHeader("Mcp-Session-Id", randomUUID());
     return sendJson(res, 200, {
       jsonrpc: "2.0",
       id,
@@ -245,7 +271,7 @@ function handle8004Probe(
     (path === "/mcp" || path === "/api/mcp" || path === "/a2a")
   ) {
     if (wantsEventStream(req)) {
-      sendMcpSseEndpoint(res);
+      sendMcpSseStream(req, res, cfg);
       return true;
     }
     sendJson(
@@ -300,7 +326,7 @@ function handle8004Probe(
 }
 
 const server = createServer(async (req, res) => {
-  setCors(res, config.webOrigin);
+  setCors(res, config, req.headers.origin);
 
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
@@ -350,6 +376,10 @@ const server = createServer(async (req, res) => {
     }
 
     if (isReadMethod(req.method) && path === "/.well-known/mcp.json") {
+      if (wantsEventStream(req)) {
+        sendMcpSseStream(req, res, config);
+        return;
+      }
       return sendJson(res, 200, buildMcpManifest(config), req.method);
     }
 
@@ -370,7 +400,8 @@ const server = createServer(async (req, res) => {
         path === "/mcp" ||
         path === "/api/mcp" ||
         path === "/a2a" ||
-        path === "/.well-known/mcp.json")
+        path === "/.well-known/mcp.json" ||
+        path === "/.well-known/agent-card.json")
     ) {
       try {
         return await handleMcpJsonRpc(req, res, config);
@@ -465,19 +496,95 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 401, { error: "Unauthorized" });
     }
 
+    if (req.method === "GET" && path === "/api/user/status") {
+      const telegramUserId = url.searchParams.get("telegramUserId")?.trim();
+      if (!telegramUserId) {
+        return sendJson(res, 400, { error: "telegramUserId is required" });
+      }
+      return sendJson(res, 200, await handleUserStatus(config, telegramUserId));
+    }
+
+    if (req.method === "POST" && path === "/api/user/auth-started") {
+      const body = await readBody(req);
+      const telegramUserId = String(body.telegramUserId ?? "").trim();
+      if (!telegramUserId) {
+        return sendJson(res, 400, { error: "telegramUserId is required" });
+      }
+      return sendJson(res, 200, await handleUserAuthStarted(config, telegramUserId));
+    }
+
+    if (req.method === "POST" && path === "/api/user/link") {
+      const body = await readBody(req);
+      try {
+        return sendJson(res, 200, await handleUserLink(config, {
+          telegramUserId: body.telegramUserId
+            ? String(body.telegramUserId)
+            : undefined,
+          walletAddress: String(body.walletAddress ?? ""),
+        }));
+      } catch (err) {
+        const messageText = err instanceof Error ? err.message : "Link failed";
+        return sendJson(res, 400, { error: messageText });
+      }
+    }
+
     if (req.method === "POST" && path === "/api/intent") {
       const body = await readBody(req);
       const message = String(body.message ?? "").trim();
       if (!message) return sendJson(res, 400, { error: "message is required" });
-      const result = await quoteForMessage(config, message, transferContext(body));
+      const result = await quoteForMessage(config, message, transferContextFromBody(body));
       return sendJson(res, 200, result);
+    }
+
+    if (req.method === "POST" && path === "/api/transfer/prepare") {
+      const body = await readBody(req);
+      const ctx = transferContextFromBody(body);
+      try {
+        const result = await handleTransferPrepare(config, body, ctx);
+        return sendJson(res, 200, result);
+      } catch (err) {
+        const messageText = err instanceof Error ? err.message : "Prepare failed";
+        return sendJson(res, 400, { error: messageText });
+      }
+    }
+
+    if (req.method === "POST" && path === "/api/transfer/confirm") {
+      const body = await readBody(req);
+      const ctx = transferContextFromBody(body);
+      try {
+        const result = await handleTransferConfirm(config, body, ctx);
+        return sendJson(res, 200, result);
+      } catch (err) {
+        const messageText = err instanceof Error ? err.message : "Confirm failed";
+        return sendJson(res, 400, { error: messageText });
+      }
+    }
+
+    if (req.method === "POST" && path === "/api/transfer/telegram-confirm") {
+      const body = await readBody(req);
+      const ctx = transferContextFromBody(body);
+      try {
+        const result = await handleTelegramConfirm(config, body, ctx);
+        return sendJson(res, 200, result);
+      } catch (err) {
+        const messageText =
+          err instanceof Error ? err.message : "Confirm link failed";
+        return sendJson(res, 400, { error: messageText });
+      }
     }
 
     if (req.method === "POST" && path === "/api/transfer") {
       const body = await readBody(req);
       const message = String(body.message ?? "").trim();
       if (!message) return sendJson(res, 400, { error: "message is required" });
-      const result = await executeForMessage(config, message, transferContext(body));
+      const ctx = transferContextFromBody(body);
+      if (ctx?.senderWallet) {
+        return sendJson(res, 400, {
+          error:
+            "User-wallet sends use POST /api/transfer/prepare then /api/transfer/confirm.",
+        });
+      }
+      const result = await executeForMessage(config, message, ctx);
       return sendJson(res, 200, result);
     }
 
@@ -487,28 +594,35 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "GET" && path === "/api/contacts") {
       const name = url.searchParams.get("name");
+      const ctx = transferContextFromBody({
+        telegramUserId: url.searchParams.get("telegramUserId"),
+        senderWallet: url.searchParams.get("senderWallet"),
+        userId: url.searchParams.get("userId"),
+      });
       if (name) {
-        const contact = getContactByName(config, name);
+        const contact = getContactByName(config, name, ctx);
         if (!contact) return sendJson(res, 404, { error: "Contact not found" });
         return sendJson(res, 200, { contact });
       }
-      return sendJson(res, 200, { contacts: listContacts(config) });
+      return sendJson(res, 200, { contacts: listContacts(config, ctx) });
     }
 
     if (req.method === "POST" && path === "/api/contacts/sync") {
       const body = await readBody(req);
+      const ctx = transferContextFromBody(body);
       const raw = Array.isArray(body.contacts) ? body.contacts : [];
       const contacts = raw
         .map((item) => StoredContactSchema.safeParse(item))
         .filter((r) => r.success)
         .map((r) => r.data);
       return sendJson(res, 200, {
-        contacts: bulkSyncContacts(config, contacts),
+        contacts: bulkSyncContacts(config, contacts, ctx),
       });
     }
 
     if (req.method === "POST" && path === "/api/contacts/import-phone") {
       const body = await readBody(req);
+      const ctx = transferContextFromBody(body);
       const raw = Array.isArray(body.contacts) ? body.contacts : [];
       const entries = raw
         .map((item) => {
@@ -526,29 +640,42 @@ const server = createServer(async (req, res) => {
 
       return sendJson(res, 200, {
         imported: entries.length,
-        contacts: importContactsFromPhone(config, entries),
+        contacts: importContactsFromPhone(config, entries, ctx),
       });
     }
 
     if (req.method === "POST" && path === "/api/contacts") {
       const body = await readBody(req);
+      const ctx = transferContextFromBody(body);
       const parsed = StoredContactSchema.safeParse(body);
       if (!parsed.success) {
         return sendJson(res, 400, { error: "Invalid contact payload" });
       }
-      return sendJson(res, 200, { contact: saveContact(config, parsed.data) });
+      return sendJson(res, 200, {
+        contact: saveContact(config, parsed.data, ctx),
+      });
     }
 
     if (req.method === "DELETE" && path.startsWith("/api/contacts/")) {
       const id = decodeURIComponent(path.slice("/api/contacts/".length));
       if (!id) return sendJson(res, 400, { error: "contact id required" });
-      const removed = removeContact(config, id);
+      const ctx = transferContextFromBody({
+        telegramUserId: url.searchParams.get("telegramUserId"),
+        senderWallet: url.searchParams.get("senderWallet"),
+        userId: url.searchParams.get("userId"),
+      });
+      const removed = removeContact(config, id, ctx);
       if (!removed) return sendJson(res, 404, { error: "Contact not found" });
       return sendJson(res, 200, { ok: true });
     }
 
     if (req.method === "GET" && path === "/api/history") {
-      return sendJson(res, 200, { items: getHistory(config) });
+      const ctx = transferContextFromBody({
+        telegramUserId: url.searchParams.get("telegramUserId"),
+        senderWallet: url.searchParams.get("senderWallet"),
+        userId: url.searchParams.get("userId"),
+      });
+      return sendJson(res, 200, { items: getHistory(config, ctx) });
     }
 
     if (req.method === "GET" && path === "/api/schedules") {

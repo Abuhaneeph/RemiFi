@@ -2,23 +2,39 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { ConnectWallet } from "./ConnectWallet";
 import { LanguageSelector } from "./LanguageSelector";
+import { TelegramLink } from "./TelegramLink";
+import { TelegramWalletLink } from "./TelegramWalletLink";
 import { useWallet, shortAddress } from "../context/WalletContext";
 import { useLanguage } from "../context/LanguageContext";
+import { markUserAuthStarted } from "../lib/api";
+import { useTelegramDeepLink } from "../hooks/useTelegramDeepLink";
 
 export function AuthFlow() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { address, isConnected } = useWallet();
   const { t } = useLanguage();
+  const { telegramUserId } = useTelegramDeepLink();
+
+  useEffect(() => {
+    if (telegramUserId) {
+      void markUserAuthStarted(telegramUserId).catch(() => {});
+    }
+  }, [telegramUserId]);
 
   useEffect(() => {
     if (!isConnected) return;
-    const timer = setTimeout(() => router.push("/home"), 1200);
+    const next =
+      searchParams.get("tg") && searchParams.get("tg") !== "linked"
+        ? "/home?tg=linked"
+        : "/home";
+    const timer = setTimeout(() => router.push(next), 1200);
     return () => clearTimeout(timer);
-  }, [isConnected, router]);
+  }, [isConnected, router, searchParams]);
 
   return (
       <div className="screen px-7 pb-8 pt-6">
@@ -67,10 +83,19 @@ export function AuthFlow() {
             <ConnectWallet label={t("auth.continue")} />
           )}
 
-          <Link href="/home" className="text-sm font-semibold text-muted">
-            {t("auth.skip")}
-          </Link>
+          {telegramUserId ? (
+            <TelegramLink
+              telegramUserId={telegramUserId}
+              className="text-sm font-semibold text-brand-600"
+              label="Return to Telegram after setup"
+            />
+          ) : (
+            <Link href="/home" className="text-sm font-semibold text-muted">
+              {t("auth.skip")}
+            </Link>
+          )}
         </div>
+        <TelegramWalletLink />
       </div>
   );
 }

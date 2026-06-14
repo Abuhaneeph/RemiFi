@@ -10,6 +10,7 @@ coverage/
 *.tsbuildinfo
 .openclaw/
 data/celo-builders.connection
+data/users/
 
 # Foundry build artifacts
 contract/cache/

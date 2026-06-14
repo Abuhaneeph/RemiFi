@@ -44,6 +44,8 @@ export function ConnectWallet({ label }: { label?: string }) {
         description: "Send stablecoins across borders, as easy as a message.",
         url: "https://remifi.xyz",
       },
+    }).catch(() => {
+      /* user closed modal or auth failed */
     });
   };
 

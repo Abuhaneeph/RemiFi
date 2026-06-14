@@ -1,3 +1,5 @@
+import { readUserScope, scopeQuery } from "./user-scope";
+
 const API_BASE =
   process.env.NEXT_PUBLIC_AGENT_API_URL ?? "http://localhost:8787";
 
@@ -7,6 +9,10 @@ export type TransferContext = {
   destinationCountry?: string;
   recipientWallet?: string;
   recipientPhone?: string;
+  senderPhone?: string;
+  telegramUserId?: string;
+  senderWallet?: string;
+  userId?: string;
 };
 
 export type QuoteResponse = {
@@ -31,6 +37,53 @@ export type QuoteResponse = {
   deliveryMethod?: "wallet" | "escrow";
   matchedContact?: string;
   exchangeRate?: number;
+  fundingOk?: boolean;
+  userSourceBalance?: number;
+  agentSourceBalance?: number;
+  shortfall?: number;
+  fundingHint?: string;
+};
+
+export type UserStatusResponse = {
+  state:
+    | "unknown"
+    | "wallet_pending"
+    | "wallet_ready"
+    | "funded"
+    | "send_pending";
+  userId: string | null;
+  telegramUserId: string | null;
+  walletAddress: string | null;
+  balanceUsd: number;
+  sendToken: string;
+  minSendUsd: number;
+  links: {
+    auth: string;
+    deposit: string;
+    people: string;
+    telegram: string;
+  };
+  pendingConfirmUrl?: string;
+};
+
+export type PrepareTransferResponse = {
+  quoteToken?: string;
+  confirmUrl?: string;
+  receiptId: string;
+  deliveryMethod: "wallet" | "escrow";
+  recipientReceives: number;
+  destinationCurrency: string;
+  summary: string;
+  savings: string;
+  transactions: Array<{
+    to: string;
+    data: string;
+    value: string;
+    label: string;
+  }>;
+  claimUrl?: string;
+  claimId?: string;
+  claimSecret?: string;
 };
 
 export type TransferResponse = {
@@ -198,7 +251,7 @@ export async function fetchQuote(
   return handle<QuoteResponse>(res);
 }
 
-/** Execute a transfer derived from a message. Returns a real txHash on success. */
+/** Execute a transfer derived from a message (agent wallet — legacy). */
 export async function executeTransfer(
   message: string,
   ctx?: TransferContext
@@ -209,6 +262,90 @@ export async function executeTransfer(
     body: JSON.stringify({ message, ...ctx }),
   });
   return handle<TransferResponse>(res);
+}
+
+export async function fetchUserStatus(
+  telegramUserId: string
+): Promise<UserStatusResponse> {
+  const res = await fetch(
+    `${API_BASE}/api/user/status?telegramUserId=${encodeURIComponent(telegramUserId)}`,
+    { headers: headers() }
+  );
+  return handle<UserStatusResponse>(res);
+}
+
+export async function markUserAuthStarted(
+  telegramUserId: string
+): Promise<{ ok: boolean; userId: string }> {
+  const res = await fetch(`${API_BASE}/api/user/auth-started`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ telegramUserId }),
+  });
+  return handle<{ ok: boolean; userId: string }>(res);
+}
+
+export async function linkTelegramUser(input: {
+  telegramUserId?: string;
+  walletAddress: string;
+}): Promise<{ ok: boolean; user: { userId: string; walletAddress?: string } }> {
+  const res = await fetch(`${API_BASE}/api/user/link`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  return handle(res);
+}
+
+export async function prepareTransfer(
+  input: {
+    message?: string;
+    quoteToken?: string;
+    senderWallet: string;
+  } & TransferContext
+): Promise<PrepareTransferResponse> {
+  const res = await fetch(`${API_BASE}/api/transfer/prepare`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  return handle<PrepareTransferResponse>(res);
+}
+
+export async function confirmTransfer(
+  input: {
+    receiptId: string;
+    txHash: string;
+    senderWallet: string;
+    quoteToken?: string;
+    message?: string;
+  } & TransferContext
+): Promise<TransferResponse> {
+  const res = await fetch(`${API_BASE}/api/transfer/confirm`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(input),
+  });
+  return handle<TransferResponse>(res);
+}
+
+/** User-signed send: prepare → sign in browser → confirm. */
+export async function executeUserTransfer(
+  message: string,
+  senderWallet: string,
+  sign: (prepared: PrepareTransferResponse) => Promise<string>,
+  ctx?: TransferContext
+): Promise<TransferResponse> {
+  const prepared = await prepareTransfer({ message, senderWallet, ...ctx });
+  const txHash = await sign(prepared);
+  return confirmTransfer({
+    receiptId: prepared.receiptId,
+    txHash,
+    senderWallet,
+    quoteToken: prepared.quoteToken,
+    message,
+    ...ctx,
+  });
 }
 
 /** The agent's on-chain address (Model A wallet) used for demo balances. */
@@ -236,8 +373,13 @@ export async function fetchBalances(address: string): Promise<BalanceResponse> {
 }
 
 /** Transfer history from the agent store (data/transactions.json). */
-export async function fetchHistory(): Promise<HistoryResponse> {
-  const res = await fetch(`${API_BASE}/api/history`, { headers: headers() });
+export async function fetchHistory(
+  walletAddress?: string | null
+): Promise<HistoryResponse> {
+  const res = await fetch(
+    `${API_BASE}/api/history${scopeQuery(walletAddress)}`,
+    { headers: headers() }
+  );
   const data = await handle<HistoryResponse>(res);
   return { items: Array.isArray(data.items) ? data.items : [] };
 }
@@ -272,12 +414,13 @@ export async function toggleSchedule(
 
 /** Sync contacts to the agent API so Telegram/WhatsApp/CLI can resolve names. */
 export async function syncContacts(
-  contacts: StoredContact[]
+  contacts: StoredContact[],
+  walletAddress?: string | null
 ): Promise<ContactsResponse> {
   const res = await fetch(`${API_BASE}/api/contacts/sync`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ contacts }),
+    body: JSON.stringify({ contacts, ...readUserScope(walletAddress) }),
   });
   const data = await handle<ContactsResponse>(res);
   return {
@@ -286,8 +429,13 @@ export async function syncContacts(
 }
 
 /** Fetch contacts stored on the agent API. */
-export async function fetchContacts(): Promise<ContactsResponse> {
-  const res = await fetch(`${API_BASE}/api/contacts`, { headers: headers() });
+export async function fetchContacts(
+  walletAddress?: string | null
+): Promise<ContactsResponse> {
+  const res = await fetch(
+    `${API_BASE}/api/contacts${scopeQuery(walletAddress)}`,
+    { headers: headers() }
+  );
   const data = await handle<ContactsResponse>(res);
   return {
     contacts: Array.isArray(data.contacts) ? data.contacts : [],
@@ -296,12 +444,13 @@ export async function fetchContacts(): Promise<ContactsResponse> {
 
 /** Bulk import device address-book entries into the agent contact store. */
 export async function importPhoneContacts(
-  contacts: PhoneImportEntry[]
+  contacts: PhoneImportEntry[],
+  walletAddress?: string | null
 ): Promise<ContactsResponse & { imported: number }> {
   const res = await fetch(`${API_BASE}/api/contacts/import-phone`, {
     method: "POST",
     headers: headers(),
-    body: JSON.stringify({ contacts }),
+    body: JSON.stringify({ contacts, ...readUserScope(walletAddress) }),
   });
   const data = await handle<ContactsResponse & { imported: number }>(res);
   return {

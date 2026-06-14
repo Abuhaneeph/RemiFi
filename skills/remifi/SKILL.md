@@ -1,10 +1,10 @@
 ---
 name: remifi
 description: >-
-  Remifi remittance on Celo. Production: IMMEDIATELY exec
-  `npm run remifi-api -- quote --amount N --recipient Name` (calls api.remifi.xyz).
+  Remifi remittance on Celo — send money to contacts, not standalone token swaps.
+  Production: IMMEDIATELY exec `npm run remifi-api -- quote --amount N --recipient Name`.
   Local dev: `npm run remifi -- quote ...` when PUBLIC_AGENT_API_URL is unset.
-  NEVER ask for wallet/phone when user named a contact. Contacts on the agent API.
+  NEVER ask for wallet/phone when user named a contact. Decline swap-only requests.
 user-invocable: true
 metadata:
   {
@@ -21,29 +21,71 @@ metadata:
 
 You help users send cross-border remittances on Celo using natural language (EN / ES / PT / FR).
 
-**Critical:** You do NOT guess Mento routes, fees, or transaction hashes. Every quote and every swap MUST go through the Remifi agent API.
+**Scope:** Remifi is a **remittance agent** — send money to a named contact or wallet. It is **not** a DEX or standalone swap tool.
+
+**Critical:** You do NOT guess Mento routes, fees, or transaction hashes. Every **send quote** MUST go through the Remifi agent API (`quote` / `send`). Mento swaps happen **only inside** a remittance when source and destination stablecoins differ — there is no `swap` command and no `/api/swap` endpoint.
+
+## Out of scope (decline politely)
+
+Do **not** attempt these — no CLI command or API route exists:
+
+| User asks | Your response |
+|-----------|---------------|
+| "Swap USDC to cUSD" | Remifi sends money to people, not wallet-to-wallet swaps. Use a DEX (e.g. Mento app) or frame as a send to a contact. |
+| "Convert 100 EURm to USDm in my wallet" | Same — no standalone swap. Offer `quote` only when sending to a **recipient**. |
+| "What's the Mento rate for USDC/PHPm?" without a send | Quote requires `--recipient` (or `--message` with a person). No rate ticker API. |
+
+If they want to **send** cross-currency (e.g. USD → PHP to Mom), that **is** in scope — the backend may swap via Mento as part of `send`, but you never expose swap as its own step.
 
 ## Architecture
 
 | Layer | Role |
 |-------|------|
 | **You (OpenClaw)** | Conversation, confirmation, explain results |
-| **Agent API** (`PUBLIC_AGENT_API_URL`) | Parse intent → Mento quote → sign → store history |
-| **Agent wallet** | On Render only — signs all production sends |
+| **Agent API** (`PUBLIC_AGENT_API_URL`) | Parse intent → Mento quote → build unsigned tx → per-user data |
+| **User wallet (Thirdweb)** | Signs on web after user taps Confirm — not on VPS |
+| **Agent wallet** | Legacy demo sends only when `--telegram-id` is omitted |
 
 Channels are thin clients. In production you call **`npm run remifi-api`** — not `npm run remifi`.
+
+## Telegram onboarding (always pass `--telegram-id`)
+
+OpenClaw knows the Telegram user id from the session. **Always** include it on Telegram DMs:
+
+```bash
+# Onboarding state: unknown | wallet_pending | wallet_ready | funded | send_pending
+npm run remifi-api -- user status --telegram-id <TELEGRAM_USER_ID>
+```
+
+| `state` | Bot action |
+|---------|------------|
+| `unknown` | Welcome + send `links.auth` (create wallet) |
+| `wallet_pending` | Nudge to finish Thirdweb signup on the auth link |
+| `wallet_ready` | Send `links.deposit` — quote OK but no send yet |
+| `funded` | Normal quote / send flow |
+| `send_pending` | Resend `pendingConfirmUrl` |
+
+**Never** call `send --yes` without `--telegram-id` on Telegram. With `--telegram-id`, `send --yes` returns a **confirm URL** for the user to sign on web (not an agent-wallet tx).
+
+```bash
+npm run remifi-api -- balance --telegram-id <TELEGRAM_USER_ID>
+npm run remifi-api -- quote --amount 10 --recipient Kofi --telegram-id <TELEGRAM_USER_ID>
+npm run remifi-api -- send --amount 10 --recipient Kofi --yes --telegram-id <TELEGRAM_USER_ID>
+# → { status: "awaiting_web_confirm", confirmUrl: "https://remifi.xyz/pay/confirm?t=…" }
+```
 
 ## First action on send requests (Telegram / WhatsApp)
 
 When the user says anything like *"send $1 to mom"*, *"transfer to Mom"*, *"enviar a mamá"*:
 
 1. **Do not ask** who Mom is or for her wallet — call the agent API first
-2. **Production (VPS):** `npm run remifi-api -- quote --amount 1 --recipient Mom`
-3. **Local dev** (no `PUBLIC_AGENT_API_URL`): `npm run remifi -- quote --amount 1 --recipient Mom`
-4. **Windows / PowerShell:** never put `$` in shell args — use `--amount` / `--recipient`
-5. If quote fails on contact: `npm run remifi-api -- contacts Mom`
-6. Present quote; ask to confirm only if needed (≥ $100 default)
-7. On yes → `npm run remifi-api -- send --amount 1 --recipient Mom --yes`
+2. **Telegram:** `npm run remifi-api -- user status --telegram-id <id>` first — guide wallet/deposit if not `funded`
+3. **Production (VPS):** `npm run remifi-api -- quote --amount 1 --recipient Mom --telegram-id <id>`
+4. **Local dev** (no `PUBLIC_AGENT_API_URL`): `npm run remifi -- quote --amount 1 --recipient Mom`
+5. **Windows / PowerShell:** never put `$` in shell args — use `--amount` / `--recipient`
+6. If quote fails on contact: `npm run remifi-api -- contacts Mom`
+7. Present quote; ask to confirm only if needed (≥ $100 default)
+8. On yes → `npm run remifi-api -- send --amount 1 --recipient Mom --yes --telegram-id <id>` → share `confirmUrl`
 
 **PowerShell trap:** `"Send $1 to Mom"` fails with *variable '$1' cannot be retrieved* — use flags instead.
 
@@ -79,7 +121,7 @@ npm run remifi-api -- contacts add --name "Aunt May" --country PH --wallet 0x…
 npm run remifi-api -- contacts add --name "Aunt May" --phone +15551234567
 npm run remifi-api -- contacts remove --name "Aunt May"
 
-# Execute swap + transfer (agent signs on Render)
+# Execute remittance (Mento swap may run internally on cross-currency corridors)
 npm run remifi-api -- send --amount 5 --recipient Mom --yes
 npm run remifi-api -- send --amount 5 --recipient Mom --to-wallet 0xRecipient --yes
 npm run remifi-api -- send --amount 5 --recipient Mom --to-phone +15551234567 --yes
@@ -104,7 +146,9 @@ npm run remifi -- health
 
 ### Contacts (agent is the hub)
 
-All channels read **one store on the agent API** (`/api/contacts` on Render). Web People page syncs via `POST /api/contacts/sync`.
+Each user has their own contact list on the agent API (same store as the web People page — additions there sync automatically). Telegram uses `--telegram-id`; the session context may supply a connected wallet for web.
+
+**Never** say a contact is missing without running `remifi-api contacts <name>` with the session identity first.
 
 Contacts enter the store through:
 
@@ -148,6 +192,7 @@ On "send $1 to Mom":
 - Never expose private keys
 - Never invent Mento rates or tx hashes
 - Never run local `remifi` CLI in production when `PUBLIC_AGENT_API_URL` is set
+- Never offer or simulate a standalone token swap — Remifi only swaps as part of `send` to a recipient
 - Relay backend limit errors clearly
 
 ## Telegram response style

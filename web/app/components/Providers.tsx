@@ -6,17 +6,17 @@ import { LanguageProvider } from "../context/LanguageContext";
 import { WalletPreferencesProvider } from "../context/WalletPreferencesContext";
 import { Web3Providers } from "./Web3Providers";
 
-/** App-wide providers (including thirdweb for wallet persistence). */
+/** App-wide providers (thirdweb must wrap anything using useWallet / useActiveAccount). */
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <LanguageProvider>
-      <ContactsProvider>
-        <WalletPreferencesProvider>
-          <AddContactProvider>
-            <Web3Providers>{children}</Web3Providers>
-          </AddContactProvider>
-        </WalletPreferencesProvider>
-      </ContactsProvider>
+      <WalletPreferencesProvider>
+        <Web3Providers>
+          <ContactsProvider>
+            <AddContactProvider>{children}</AddContactProvider>
+          </ContactsProvider>
+        </Web3Providers>
+      </WalletPreferencesProvider>
     </LanguageProvider>
   );
 }

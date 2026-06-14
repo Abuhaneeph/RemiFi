@@ -15,24 +15,28 @@ import { BoltIcon, ChevronLeftIcon, ContactPickerIcon, MicIcon } from "./icons";
 import { useAgentApi } from "../context/AgentApiContext";
 import { useContacts } from "../context/ContactsContext";
 import { useLanguage } from "../context/LanguageContext";
+import { useWallet } from "../context/WalletContext";
 import {
   contactTransferContext,
   extractRecipientName,
   matchContact,
 } from "../lib/contacts";
-import { normalizePayMessage, payErrorHint } from "../lib/pay-message";
+import { formatPayError, normalizePayMessage } from "../lib/pay-message";
 import {
   fetchPayAgentReply,
   isOpenClawConfigured,
   isOpenClawReachable,
   toAgentHistory,
 } from "../lib/pay-agent";
+import { useActiveAccount } from "thirdweb/react";
 import {
   executeTransfer,
+  executeUserTransfer,
   fetchQuote,
   type QuoteResponse,
   type TransferContext,
 } from "../lib/api";
+import { signPreparedTransfer } from "../lib/transfer-sign";
 import { checkRateAlerts } from "../lib/rate-alerts";
 import { listenForSpeech, speechLocale, speechRecognitionSupported } from "../lib/speech";
 import { FxRateBanner } from "./FxRateBanner";
@@ -102,6 +106,8 @@ export function PayChat() {
   const { allPeople } = useContacts();
   const { refreshBalancesAfterSend } = useAgentApi();
   const { t, locale } = useLanguage();
+  const { address } = useWallet();
+  const account = useActiveAccount();
 
   const sessionId = useRef("");
   useEffect(() => {
@@ -131,7 +137,11 @@ export function PayChat() {
   const [alertQuote, setAlertQuote] = useState<QuoteResponse | null>(null);
   const [alertOpen, setAlertOpen] = useState(false);
   const [contactPickerSupported, setContactPickerSupported] = useState(false);
-  const [openClawMode, setOpenClawMode] = useState(false);
+  /** loading: probing OpenClaw; agent: gateway chat only; direct: /api/intent quotes */
+  const [chatMode, setChatMode] = useState<"loading" | "agent" | "direct">(
+    "loading"
+  );
+  const chatModeRef = useRef<"loading" | "agent" | "direct">("loading");
   const [openClawOnline, setOpenClawOnline] = useState(true);
   const stopSpeechRef = useRef<(() => void) | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -139,7 +149,9 @@ export function PayChat() {
   useEffect(() => {
     void (async () => {
       const configured = await isOpenClawConfigured();
-      setOpenClawMode(configured);
+      const mode = configured ? "agent" : "direct";
+      chatModeRef.current = mode;
+      setChatMode(mode);
       if (configured) {
         setOpenClawOnline(await isOpenClawReachable());
       }
@@ -215,7 +227,8 @@ export function PayChat() {
     const { reply, error } = await fetchPayAgentReply(
       sessionId.current,
       history,
-      trimmed
+      trimmed,
+      address
     );
     if (reply) {
       appendBot({ text: formatAgentReply(reply) });
@@ -255,6 +268,7 @@ export function PayChat() {
     const ctx = {
       ...contactTransferContext(activeContact),
       ...extraCtx,
+      ...(address ? { senderWallet: address } : {}),
     };
     const apiMessage = normalizePayMessage(trimmed, activeContact);
     const quote = await fetchQuote(apiMessage, ctx);
@@ -311,7 +325,7 @@ export function PayChat() {
     extraCtx?: TransferContext
   ) => {
     const trimmed = text.trim();
-    if (!trimmed || thinking) return;
+    if (!trimmed || thinking || chatModeRef.current === "loading") return;
 
     setMessages((prev) => [
       ...prev,
@@ -322,7 +336,7 @@ export function PayChat() {
     setThinking(true);
 
     try {
-      if (openClawMode) {
+      if (chatModeRef.current === "agent") {
         await sendViaOpenClaw(trimmed);
         return;
       }
@@ -331,7 +345,7 @@ export function PayChat() {
     } catch (err) {
       const reason = err instanceof Error ? err.message : "Something went wrong";
       appendBot({
-        text: `${t("pay.errorPrefix")} ${reason}. ${payErrorHint(reason)}`,
+        text: formatPayError(reason, t("pay.errorPrefix")),
       });
     } finally {
       setThinking(false);
@@ -339,8 +353,21 @@ export function PayChat() {
   };
 
   useEffect(() => {
+    if (chatMode === "loading") return;
     if (presetSent.current) return;
     if (!presetTo && !presetWallet) return;
+
+    const dedupeKey = `remifi-pay-preset:${presetTo ?? ""}:${presetWallet ?? ""}:${presetAmount ?? ""}`;
+    try {
+      if (sessionStorage.getItem(dedupeKey)) {
+        presetSent.current = true;
+        return;
+      }
+      sessionStorage.setItem(dedupeKey, "1");
+    } catch {
+      /* private browsing */
+    }
+
     presetSent.current = true;
     if (presetWallet) {
       void sendMessage(
@@ -353,7 +380,7 @@ export function PayChat() {
     const amount = presetAmount ? Number(presetAmount) : 50;
     void sendMessage(`Send $${amount} to ${presetTo}`, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presetTo, presetAmount, presetWallet]);
+  }, [chatMode, presetTo, presetAmount, presetWallet]);
 
   const dismissConfirm = (msgId: string) => {
     setMessages((prev) =>
@@ -373,7 +400,15 @@ export function PayChat() {
       confirm.quote.intent.recipientName ?? "your recipient";
 
     try {
-      const result = await executeTransfer(confirm.message, confirm.ctx);
+      const result =
+        address && account
+          ? await executeUserTransfer(
+              confirm.message,
+              address,
+              (prepared) => signPreparedTransfer(account, prepared),
+              { ...confirm.ctx, senderWallet: address }
+            )
+          : await executeTransfer(confirm.message, confirm.ctx);
       const sentTotal =
         confirm.quote.intent.amount + (confirm.quote.mentoFeeUsd ?? 0);
       await refreshBalancesAfterSend(sentTotal);
@@ -482,6 +517,7 @@ export function PayChat() {
     });
   }, [messages, thinking]);
 
+  const chatReady = chatMode !== "loading";
   const hasStarted =
     input.length > 0 || messages.some((m) => m.role === "user");
   const visibleMessages = hasStarted
@@ -502,7 +538,7 @@ export function PayChat() {
 
       <AgentStatusBanner />
 
-      {openClawMode && !openClawOnline ? (
+      {chatMode === "agent" && !openClawOnline ? (
         <div className="mx-5 mb-2 rounded-[var(--radius-lg)] border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-brand-800">
           {t("pay.openClawOffline")}
         </div>
@@ -597,7 +633,7 @@ export function PayChat() {
               <span className="text-xs font-bold text-brand-700">{ASSISTANT.name}</span>
             </div>
             <div className="bubble bubble-bot text-soft">
-              {t(openClawMode ? "pay.agentThinking" : "pay.thinking")}
+              {t(chatMode === "agent" ? "pay.agentThinking" : "pay.thinking")}
             </div>
           </div>
         )}
@@ -611,7 +647,7 @@ export function PayChat() {
                 key={q.label}
                 type="button"
                 className="chip chip-pay-quick min-w-0"
-                disabled={thinking}
+                disabled={thinking || !chatReady}
                 onClick={() => void sendMessage(q.label)}
               >
                 {q.label}
@@ -639,7 +675,7 @@ export function PayChat() {
               className="icon-btn shrink-0"
               aria-label="Pick a contact"
               onClick={() => void pickContact()}
-              disabled={thinking}
+              disabled={thinking || !chatReady}
             >
               <ContactPickerIcon className="h-[1.15rem] w-[1.15rem]" />
             </button>
@@ -650,11 +686,15 @@ export function PayChat() {
             aria-label={t("pay.voice")}
             aria-pressed={listening}
             onClick={toggleVoice}
-            disabled={thinking}
+            disabled={thinking || !chatReady}
           >
             <MicIcon className="h-[1.15rem] w-[1.15rem]" />
           </button>
-          <button type="submit" className="btn btn-dark shrink-0 px-5" disabled={thinking}>
+          <button
+            type="submit"
+            className="btn btn-dark shrink-0 px-5"
+            disabled={thinking || !chatReady}
+          >
             {t("pay.payButton")}
           </button>
         </form>

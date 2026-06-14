@@ -13,10 +13,11 @@ import "dotenv/config";
 import { CELO_SEPOLIA_CHAIN_ID } from "../agent/registry-addresses.js";
 import { CELO_SEPOLIA_USDC } from "../mento/client.js";
 import { explorerTxUrl } from "../utils/explorer.js";
-import type { TransferContext } from "../api/service.js";
+import type { TransferContext } from "../api/transfer-context.js";
 
 interface Args {
   command?: string;
+  sub?: string;
   message?: string;
   amount?: number;
   currency?: string;
@@ -27,6 +28,8 @@ interface Args {
   name?: string;
   wallet?: string;
   phone?: string;
+  telegramId?: string;
+  senderWallet?: string;
   favourite?: boolean;
   yes: boolean;
 }
@@ -74,6 +77,11 @@ function parseArgs(): Args {
     else if (a === "--name" && argv[i + 1]) args.name = argv[++i].trim();
     else if (a === "--wallet" && argv[i + 1]) args.wallet = argv[++i].trim();
     else if (a === "--phone" && argv[i + 1]) args.phone = argv[++i].trim();
+    else if (a === "--telegram-id" && argv[i + 1]) {
+      args.telegramId = argv[++i].trim();
+    } else if (a === "--sender-wallet" && argv[i + 1]) {
+      args.senderWallet = argv[++i].trim();
+    }
     else if (a === "--favourite" || a === "--favorite") args.favourite = true;
     else if (a === "--yes" || a === "-y") args.yes = true;
     else messageParts.push(a);
@@ -109,7 +117,31 @@ function transferContext(args: Args): TransferContext | undefined {
   const ctx: TransferContext = {};
   if (args.toWallet) ctx.recipientWallet = args.toWallet;
   if (args.toPhone) ctx.recipientPhone = args.toPhone;
+  if (args.telegramId) ctx.telegramUserId = args.telegramId;
+  if (args.senderWallet && WALLET_RE.test(args.senderWallet)) {
+    ctx.senderWallet = args.senderWallet;
+  }
   return Object.keys(ctx).length ? ctx : undefined;
+}
+
+function ctxBody(args: Args, extra?: Record<string, unknown>) {
+  return { ...transferContext(args), ...extra };
+}
+
+function scopedQuery(
+  args: Args,
+  params?: Record<string, string | undefined>
+): string {
+  const search = new URLSearchParams();
+  if (params) {
+    for (const [key, value] of Object.entries(params)) {
+      if (value) search.set(key, value);
+    }
+  }
+  if (args.telegramId) search.set("telegramUserId", args.telegramId);
+  if (args.senderWallet) search.set("senderWallet", args.senderWallet);
+  const q = search.toString();
+  return q ? `?${q}` : "";
 }
 
 function headers(): Record<string, string> {
@@ -229,7 +261,7 @@ async function main() {
         let existing: { id: string } | undefined;
         try {
           const lookup = await apiFetch<{ contact: { id: string } }>(
-            `/api/contacts?name=${encodeURIComponent(name)}`
+            `/api/contacts${scopedQuery(args, { name })}`
           );
           existing = lookup.contact;
         } catch {
@@ -246,7 +278,7 @@ async function main() {
         };
         const saved = await apiFetch<{ contact: unknown }>("/api/contacts", {
           method: "POST",
-          body: JSON.stringify(body),
+          body: JSON.stringify({ ...body, ...ctxBody(args) }),
         });
         ok({ action: existing ? "updated" : "added", contact: saved.contact });
         return;
@@ -256,11 +288,12 @@ async function main() {
         const name = args.name ?? tokens.slice(1).join(" ").trim();
         if (!name) fail('Usage: remifi-api contacts remove --name "Aunt May"');
         const lookup = await apiFetch<{ contact: { id: string; name: string } }>(
-          `/api/contacts?name=${encodeURIComponent(name)}`
+          `/api/contacts${scopedQuery(args, { name })}`
         );
-        await apiFetch(`/api/contacts/${encodeURIComponent(lookup.contact.id)}`, {
-          method: "DELETE",
-        });
+        await apiFetch(
+          `/api/contacts/${encodeURIComponent(lookup.contact.id)}${scopedQuery(args)}`,
+          { method: "DELETE" }
+        );
         ok({ action: "removed", contact: lookup.contact });
         return;
       }
@@ -268,18 +301,63 @@ async function main() {
       const lookup = args.name ?? args.message;
       if (lookup) {
         const data = await apiFetch<{ contact: unknown }>(
-          `/api/contacts?name=${encodeURIComponent(lookup)}`
+          `/api/contacts${scopedQuery(args, { name: lookup })}`
         );
         ok({ contact: data.contact });
         return;
       }
 
-      const data = await apiFetch<{ contacts: unknown[] }>("/api/contacts");
+      const data = await apiFetch<{ contacts: unknown[] }>(
+        `/api/contacts${scopedQuery(args)}`
+      );
       ok({ contacts: data.contacts });
       return;
     }
 
+    case "user": {
+      const tokens = (args.message ?? "").trim().split(/\s+/).filter(Boolean);
+      const sub = tokens[0]?.toLowerCase() ?? "status";
+      if (sub !== "status") {
+        fail("Usage: remifi-api user status --telegram-id <id>");
+      }
+      if (!args.telegramId) {
+        fail("user status requires --telegram-id <telegramUserId>");
+      }
+      const status = await apiFetch<Record<string, unknown>>(
+        `/api/user/status?telegramUserId=${encodeURIComponent(args.telegramId)}`
+      );
+      ok({ status });
+      return;
+    }
+
     case "balance": {
+      if (args.telegramId) {
+        const status = await apiFetch<{
+          walletAddress: string | null;
+          balanceUsd: number;
+          sendToken: string;
+        }>(
+          `/api/user/status?telegramUserId=${encodeURIComponent(args.telegramId)}`
+        );
+        if (!status.walletAddress) {
+          fail("User has no linked wallet yet. Send them the auth link first.");
+        }
+        const data = await apiFetch<{
+          address: string;
+          items: { symbol: string; balance: number }[];
+        }>(
+          `/api/balance?address=${encodeURIComponent(status.walletAddress)}`
+        );
+        ok({
+          telegramUserId: args.telegramId,
+          address: data.address,
+          items: data.items,
+          balanceUsd: status.balanceUsd,
+          sendToken: status.sendToken,
+        });
+        return;
+      }
+
       const agent = await apiFetch<{ address: string | null }>("/api/agent");
       if (!agent.address) fail("Agent wallet not configured on the API.");
       const data = await apiFetch<{
@@ -291,7 +369,9 @@ async function main() {
     }
 
     case "history": {
-      const data = await apiFetch<{ items: unknown[] }>("/api/history");
+      const data = await apiFetch<{ items: unknown[] }>(
+        `/api/history${scopedQuery(args)}`
+      );
       ok({ items: data.items });
       return;
     }
@@ -307,7 +387,7 @@ async function main() {
       }
       const quote = await apiFetch<Record<string, unknown>>("/api/intent", {
         method: "POST",
-        body: JSON.stringify({ message, ...transferContext(args) }),
+        body: JSON.stringify({ message, ...ctxBody(args) }),
       });
       ok({ quote, message });
       return;
@@ -323,13 +403,90 @@ async function main() {
         );
       }
       const ctx = transferContext(args);
+
+      if (args.telegramId) {
+        const status = await apiFetch<{
+          state: string;
+          walletAddress: string | null;
+          links: { auth: string; deposit: string };
+          balanceUsd: number;
+          minSendUsd: number;
+        }>(
+          `/api/user/status?telegramUserId=${encodeURIComponent(args.telegramId)}`
+        );
+
+        if (status.state === "unknown" || status.state === "wallet_pending") {
+          ok({
+            status: status.state,
+            hint: "User needs a wallet first. Send them the auth link.",
+            authUrl: status.links.auth,
+          });
+          return;
+        }
+
+        if (status.state === "wallet_ready") {
+          ok({
+            status: "wallet_ready",
+            hint: "User wallet is linked but unfunded. Send the deposit link.",
+            depositUrl: status.links.deposit,
+            balanceUsd: status.balanceUsd,
+          });
+          return;
+        }
+
+        if (!status.walletAddress) {
+          fail("Telegram user has no linked wallet.");
+        }
+
+        const quote = await apiFetch<Record<string, unknown>>("/api/intent", {
+          method: "POST",
+          body: JSON.stringify({
+            message,
+            telegramUserId: args.telegramId,
+            senderWallet: status.walletAddress,
+            ...ctx,
+          }),
+        });
+
+        if (!args.yes) {
+          ok({
+            status: "needs_confirmation",
+            quote,
+            hint: "Get an explicit yes from the user, then re-run with --yes.",
+          });
+          return;
+        }
+
+        const confirm = await apiFetch<{
+          confirmUrl: string;
+          quoteToken: string;
+          summary: string;
+        }>("/api/transfer/telegram-confirm", {
+          method: "POST",
+          body: JSON.stringify({
+            message,
+            telegramUserId: args.telegramId,
+            senderWallet: status.walletAddress,
+            ...ctx,
+          }),
+        });
+
+        ok({
+          status: "awaiting_web_confirm",
+          confirmUrl: confirm.confirmUrl,
+          summary: confirm.summary,
+          hint: "User must tap the confirm link to sign with their Thirdweb wallet.",
+        });
+        return;
+      }
+
       const quote = await apiFetch<{
         needsConfirmation?: boolean;
         fundingOk?: boolean;
         fundingHint?: string;
       }>("/api/intent", {
         method: "POST",
-        body: JSON.stringify({ message, ...ctx }),
+        body: JSON.stringify({ message, ...ctxBody(args) }),
       });
 
       if (quote.fundingOk === false) {
@@ -358,7 +515,7 @@ async function main() {
         receiptId: string;
       }>("/api/transfer", {
         method: "POST",
-        body: JSON.stringify({ message, ...ctx }),
+        body: JSON.stringify({ message, ...ctxBody(args) }),
       });
 
       const health = await apiFetch<{ chainId: number }>("/api/health");
@@ -373,7 +530,7 @@ async function main() {
 
     default:
       fail(
-        "Unknown command. Use: quote | send | contacts | contacts add | contacts remove | balance | history | health"
+        "Unknown command. Use: quote | send | user status | contacts | balance | history | health"
       );
   }
 }

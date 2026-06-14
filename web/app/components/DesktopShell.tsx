@@ -1,8 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { PROFILE } from "../data/people";
-import { Avatar } from "./Avatar";
 import { BrandLogo } from "./BrandLogo";
+import { DashboardProfileLink } from "./DashboardProfileLink";
 import { DesktopNav } from "./DesktopNav";
 import { DesktopHeaderActions } from "./DesktopHeaderActions";
 
@@ -26,10 +25,7 @@ export function DesktopShell({
 
         <DesktopNav />
 
-        <Link href="/profile" className="dashboard-profile-link">
-          <Avatar name={PROFILE.name} src={PROFILE.avatar} size={36} ring />
-          <span className="dashboard-profile-name">{PROFILE.name}</span>
-        </Link>
+        <DashboardProfileLink />
       </aside>
 
       <div className="dashboard-main">

@@ -2,16 +2,13 @@ import type { NextConfig } from "next";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const monorepoRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  ".."
-);
+const webDir = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
-  outputFileTracingRoot: monorepoRoot,
-  // Must match outputFileTracingRoot (required for Vercel monorepo builds).
+  // Self-contained Next app under web/ (no imports from repo root).
+  outputFileTracingRoot: webDir,
   turbopack: {
-    root: monorepoRoot,
+    root: webDir,
   },
   poweredByHeader: false,
   images: {
@@ -32,8 +29,8 @@ const nextConfig: NextConfig = {
       "thirdweb/extensions",
       "thirdweb/chains",
     ],
-    // Safe with turbopack.root = webDir; use `npm run dev:clean` if cache corrupts.
-    turbopackFileSystemCacheForDev: true,
+    // Windows dev: filesystem cache often stalls first route compile for minutes.
+    turbopackFileSystemCacheForDev: process.platform !== "win32",
   },
 };
 
