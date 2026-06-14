@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { loadConfig, type Config } from "./config/index.js";
 import {
@@ -131,15 +132,34 @@ function wantsEventStream(req: IncomingMessage): boolean {
   return (req.headers.accept ?? "").includes("text/event-stream");
 }
 
-/** Streamable HTTP: first SSE event for MCP clients and health probes. */
-function sendMcpSseEndpoint(res: ServerResponse) {
+/**
+ * Streamable HTTP: SSE session for MCP clients and 8004scan health probes.
+ * Keeps the connection open (spec expects a persistent stream) and sends the POST URL.
+ */
+function sendMcpSseStream(
+  req: IncomingMessage,
+  res: ServerResponse,
+  cfg: Config
+) {
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
-  res.end(
-    `event: endpoint\ndata: ${JSON.stringify({ version: MCP_PROTOCOL_VERSION })}\n\n`
+  res.setHeader("X-Accel-Buffering", "no");
+
+  const endpoint = mcpTransportUrl(cfg);
+  res.write(
+    `event: endpoint\ndata: ${JSON.stringify({ url: endpoint, version: MCP_PROTOCOL_VERSION })}\n\n`
   );
+
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) res.write(": keepalive\n\n");
+  }, 15_000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    if (!res.writableEnded) res.end();
+  });
 }
 
 /** Public MCP JSON-RPC for 8004scan health probes (no API key). */
@@ -153,6 +173,7 @@ async function handleMcpJsonRpc(
   const id = body.id ?? 0;
 
   if (method === "initialize") {
+    res.setHeader("Mcp-Session-Id", randomUUID());
     return sendJson(res, 200, {
       jsonrpc: "2.0",
       id,
@@ -250,7 +271,7 @@ function handle8004Probe(
     (path === "/mcp" || path === "/api/mcp" || path === "/a2a")
   ) {
     if (wantsEventStream(req)) {
-      sendMcpSseEndpoint(res);
+      sendMcpSseStream(req, res, cfg);
       return true;
     }
     sendJson(
@@ -355,6 +376,10 @@ const server = createServer(async (req, res) => {
     }
 
     if (isReadMethod(req.method) && path === "/.well-known/mcp.json") {
+      if (wantsEventStream(req)) {
+        sendMcpSseStream(req, res, config);
+        return;
+      }
       return sendJson(res, 200, buildMcpManifest(config), req.method);
     }
 
@@ -375,7 +400,8 @@ const server = createServer(async (req, res) => {
         path === "/mcp" ||
         path === "/api/mcp" ||
         path === "/a2a" ||
-        path === "/.well-known/mcp.json")
+        path === "/.well-known/mcp.json" ||
+        path === "/.well-known/agent-card.json")
     ) {
       try {
         return await handleMcpJsonRpc(req, res, config);
