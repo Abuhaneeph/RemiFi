@@ -2,16 +2,15 @@
 
 import { useEffect, useRef } from "react";
 import { useActiveWalletConnectionStatus } from "thirdweb/react";
-import { autoConnect, type Wallet } from "thirdweb/wallets";
+import { autoConnect, type AutoConnectProps, type Wallet } from "thirdweb/wallets";
 import type { Chain } from "thirdweb/chains";
 import type { ThirdwebClient } from "thirdweb";
-import type { AppMetadata } from "thirdweb/wallets";
 
 type SafeAutoConnectProps = {
   client: ThirdwebClient;
   wallets: Wallet[];
   chain: Chain;
-  appMetadata: AppMetadata;
+  appMetadata: NonNullable<AutoConnectProps["appMetadata"]>;
   timeout?: number;
 };
 
