@@ -16,5 +16,6 @@ data/users/
 contract/cache/
 contract/out/
 
-# Local-only guide (not published to remote)
+# Local-only guides (not published to remote)
 howitworks.md
+plan
