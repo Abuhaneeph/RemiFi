@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { ThirdwebProvider } from "thirdweb/react";
 import { AgentApiProvider } from "../context/AgentApiContext";
 import { getThirdwebClient, thirdwebConfigured } from "../lib/thirdweb";
@@ -33,7 +33,9 @@ export function Web3Providers({ children }: { children: React.ReactNode }) {
           </>
         ) : null}
         <AgentApiProvider>
-          <TelegramWalletLink />
+          <Suspense fallback={null}>
+            <TelegramWalletLink />
+          </Suspense>
           {children}
         </AgentApiProvider>
       </RemifiMoonPayProvider>
