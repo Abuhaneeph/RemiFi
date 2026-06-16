@@ -3,10 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const webDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.join(webDir, "..");
 
 const nextConfig: NextConfig = {
-  // Self-contained Next app under web/ (no imports from repo root).
-  outputFileTracingRoot: webDir,
+  // Monorepo: trace from repo root so Vercel bundles web/ deps correctly.
+  outputFileTracingRoot: repoRoot,
   turbopack: {
     root: webDir,
   },

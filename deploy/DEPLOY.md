@@ -51,8 +51,11 @@ curl https://api.remifi.xyz/api/agent
 | **Build Command** | *(leave default — do not override)* |
 | **Install Command** | *(leave default)* |
 
-Do **not** add `web/vercel.json` — it breaks post-build output and causes  
-`ENOENT: …/.next/package.json`. The Next.js app lives in `web/`; Vercel Root Directory must point there.
+Do **not** add `web/vercel.json` or custom Build/Output overrides — they break post-build output.
+
+The `web` build runs `scripts/vercel-link-next-output.mjs` on Vercel to symlink `web/.next` and `web/node_modules` to the repo root (workaround for [vercel#15937](https://github.com/vercel/vercel/issues/15937)).
+
+If ENOENT errors persist after a settings fix, **delete and recreate** the Vercel project (cached `rootDirectory` metadata) or contact Vercel support.
 
 Set in Vercel env (see `web/.env.production.example`):
 
