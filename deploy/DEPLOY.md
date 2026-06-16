@@ -42,6 +42,18 @@ curl https://api.remifi.xyz/api/agent
 
 ## 2. Web — Vercel (`remifi.xyz`)
 
+**Vercel project settings (required):**
+
+| Setting | Value |
+|---------|-------|
+| **Root Directory** | `web` |
+| **Framework** | Next.js (auto) |
+| **Build Command** | *(leave default — do not override)* |
+| **Install Command** | *(leave default)* |
+
+Do **not** add `web/vercel.json` — it breaks post-build output and causes  
+`ENOENT: …/.next/package.json`. The Next.js app lives in `web/`; Vercel Root Directory must point there.
+
 Set in Vercel env (see `web/.env.production.example`):
 
 | Variable | Value |
