@@ -1,23 +1,32 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const STORAGE_KEY = "remifi.telegramUserId";
 
+function tgFromSearch(search: string): string | null {
+  const tg = new URLSearchParams(search).get("tg")?.trim() ?? null;
+  return tg && tg !== "linked" ? tg : null;
+}
+
+/** Telegram ?tg= deep link — reads URL on client only (no useSearchParams / Suspense required). */
 export function useTelegramDeepLink() {
-  const searchParams = useSearchParams();
-  const tgFromUrl = searchParams.get("tg")?.trim() ?? null;
-  const linked = searchParams.get("tg") === "linked";
+  const [tgFromUrl, setTgFromUrl] = useState<string | null>(null);
+  const [linked, setLinked] = useState(false);
 
   useEffect(() => {
-    if (tgFromUrl && tgFromUrl !== "linked") {
-      sessionStorage.setItem(STORAGE_KEY, tgFromUrl);
+    const params = new URLSearchParams(window.location.search);
+    const tg = params.get("tg")?.trim() ?? null;
+    setLinked(tg === "linked");
+    const id = tgFromSearch(window.location.search);
+    setTgFromUrl(id);
+    if (id) {
+      sessionStorage.setItem(STORAGE_KEY, id);
     }
-  }, [tgFromUrl]);
+  }, []);
 
   const telegramUserId = useMemo(() => {
-    if (tgFromUrl && tgFromUrl !== "linked") return tgFromUrl;
+    if (tgFromUrl) return tgFromUrl;
     if (typeof window === "undefined") return null;
     return sessionStorage.getItem(STORAGE_KEY);
   }, [tgFromUrl]);

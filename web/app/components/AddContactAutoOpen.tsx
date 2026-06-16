@@ -1,18 +1,19 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useAddContact } from "../context/AddContactContext";
 
+/** Opens add-contact sheet when URL has ?add=1 (client-only; no useSearchParams). */
 export function AddContactAutoOpen() {
-  const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
   const { openAddContact } = useAddContact();
   const opened = useRef(false);
 
   useEffect(() => {
-    if (opened.current || searchParams.get("add") !== "1") return;
+    if (opened.current) return;
+    if (new URLSearchParams(window.location.search).get("add") !== "1") return;
     opened.current = true;
 
     const frame = requestAnimationFrame(() => {
@@ -21,7 +22,7 @@ export function AddContactAutoOpen() {
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [openAddContact, pathname, router, searchParams]);
+  }, [openAddContact, pathname, router]);
 
   return null;
 }
